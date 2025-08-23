@@ -57,6 +57,16 @@ function socketListener(callback: any) {
 	socket.on('message', callback)
 }
 
+export async function getStatusCode(msg: string): Promise<number> {
+	socket.on('message', (e: any) => {
+		const res: Response = JSON.parse(e.data)
+		if (res.Msg == msg) {
+			return res.StatusCode
+		}
+	})
+	return 0
+}
+
 function socketOn(event: string, callback: any) {
 	socket.on(event, callback)
 }

@@ -109,6 +109,9 @@ func execute(client *gserver.Client, server *gserver.Server, msg gserver.Msg) er
 	if gserver.ReceiveLobbyCommands(client, server, msg) {
 		return nil
 	}
+	if gserver.ReceiveChatCommands(client, server, msg) {
+		return nil
+	}
 	response := gserver.MakeResponse(msg)
 	switch msg.Msg {
 	case "start game":
@@ -124,7 +127,7 @@ func execute(client *gserver.Client, server *gserver.Server, msg gserver.Msg) er
 		}
 		// todo check if there are enough players
 		playerDecks := map[int]DeckMap{
-			0: { "Gunner": 10 },
+			0: { "Gunner": 3, "Blaster": 3 },
 			1: { "Blaster": 10 },
 		}
 
@@ -153,6 +156,34 @@ func execute(client *gserver.Client, server *gserver.Server, msg gserver.Msg) er
 		startBroadcast.Body["updates"] = updates 
 		
 		client.Lobby.Broadcast(startBroadcast)
+	case "play hand":
+		var index, r, c int
+		err := gserver.CheckNumber(msg, "index", &index)
+		err = gserver.CheckNumber(msg, "r", &r)
+		err = gserver.CheckNumber(msg, "c", &c)
+		if err != nil {
+			response.Error(err.Error())
+			break
+		}
+
+		s, _ := client.Lobby.GetState("game")
+		game := s.(GameState)
+		game, err = game.playFromHand(index, Pos{Row: r, Col: c})
+		if err != nil {
+			response.Error(err.Error())
+			break
+		}
+
+		
+		game, updates := game.clearUpdates()
+		client.Lobby.UpdateState("game", game)
+
+		updateMsg := msg
+		updateMsg.Msg = "update game"
+		updateMsg.StatusCode = 0
+		updateMsg.Body["updates"] = updates 
+		
+		client.Lobby.Broadcast(updateMsg)
 	default:
 		return nil
 	}

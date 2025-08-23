@@ -14,6 +14,18 @@ import {
 	GameComponent,
 	animation,
 } from "./GameComponent"
+import {
+	Chat
+} from "./Lobby"
+import {
+	Popup
+} from "@/features/component/popup"
+
+export interface Card {
+	name: string
+	hp: number
+	atk: number
+}
 
 export interface GameState {
 	turn?: number
@@ -21,6 +33,8 @@ export interface GameState {
 	playerNumber?: number 
 	player0hand?: string[]
 	player1hand?: string[]
+	player0board?: Card[][]
+	player1board?: Card[][]
 }
 
 interface Animation {
@@ -38,8 +52,17 @@ export const Game = (): JSX.Element => {
 	const [state, setState] = useState<GameState>({})
 	const [msg, setMsg] = useState("")
 	const [body, setBody] = useState("{}")
-	const [lobby, setLobby] = useState("(None)")
+	const [started, setStarted] = useState(false)
+	const [lobby, setLobby] = useState(-1)
+	const [chat, setChat] = useState<string[]>(["hi", "yo"])
 	const [lobbyList, setLobbyList] = useState("")
+	const [popupOpen, setPopupOpen] = useState(false)
+	const [popupText, setPopupText] = useState("")
+
+	function newPopup(text: string) {
+		setPopupText(text)
+		setPopupOpen(true)
+	}
 
 	const sendMsg = (msg: string, body?: Body) => {
 		const newMsg: Msg = {Msg: msg, Body: body || {}}
@@ -74,12 +97,24 @@ export const Game = (): JSX.Element => {
 	useEffect(() => {
 		socketListener((e: any) => {
 			const res: Response = JSON.parse(e.data)
+			if (res.StatusCode == 400) {
+				newPopup("Error: " + res.Body.error)
+			}
+
 			if (res.StatusCode != 200 && res.StatusCode != 0) {
 				console.log(`Got err code ${res.StatusCode} from server: ${res.Body.error}`)
 				return
 			}
 
 			switch (res.Msg) {
+			case "chat newmsg":
+				setChat(
+					[
+						...chat, 
+						res.Body.msg
+					]
+				)
+				break
 			case "create lobby":
 				setLobby(res.Body.lobbyId)
 				break
@@ -94,7 +129,13 @@ export const Game = (): JSX.Element => {
 					break	
 
 				const s: GameState = res.Body.state
+				setStarted(true)
 				setState(s)
+				break
+			case "leave lobby":
+				if (res.StatusCode == 200) {
+					setLobby(-1)
+				}
 				break
 			case "update game":
 				const updates = res.Body.updates
@@ -107,10 +148,14 @@ export const Game = (): JSX.Element => {
 					console.log(`unrecognized msg in server response: ${res.Msg}`)
 			}
 		})
-	}, [state])
+	}, [state, chat])
 
 	function createLobby() {
 		dispatch(send({Msg: "create lobby", Body: {}}))
+	}
+
+	function leaveLobby() {
+		sendMsg("leave lobby", {lobbyId: 1})
 	}
 
 	function joinLobby() {
@@ -122,17 +167,35 @@ export const Game = (): JSX.Element => {
 	}
 
 	return <div>
+		<Popup 
+			isOpen={popupOpen} setIsOpen={setPopupOpen}
+			text={popupText}
+			/>
 		<div className="bg-gray-100">
-		<label>Your Lobby: {lobby}</label>
+		<label>Your Lobby: {lobby > 0 ? lobby : "None"}</label>
 		<div>{lobbyList}</div>
 		</div>
 		<div className="flex">
-			<button onClick={createLobby}>Create Lobby</button>
-			<button onClick={joinLobby}>Join Lobby</button>
-			<button onClick={startGame}>Start game</button>
+			{lobby > 0 && <div className="flex-col">
+				<div className="flex flex-row">
+					<button onClick={leaveLobby}>Leave Lobby</button>
+					<button onClick={startGame}>Start game</button>
+				</div>
+				<Chat chat={chat} sendChat={(msg: string) => {
+					sendMsg("chat send", {msg: msg})
+				}}/>
+			</div> || <>
+				<button onClick={createLobby}>Create Lobby</button>
+				<button onClick={joinLobby}>Join Lobby</button>
+			</>}
 		</div>
 
-		<GameComponent state={state} sendMsg={sendMsg}/>
+		{started && <GameComponent state={state} sendMsg={sendMsg}/>}
+		{state.player0board?.map((a) => {
+			return a?.map((b) => {
+				return b.name
+			})
+		})}
 
 		<div className="flex">
 			<input type="text"

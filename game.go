@@ -16,6 +16,7 @@ type Card struct {
 }
 
 var Cards = map[string]Card {
+	"Sand Castle": {Hp: 10},
 	"Gunner": {Hp: 1, Atk: 2},
 	"Blaster": {Hp: 2, Atk: 3},
 	"Sandy Fortress": {Hp: 4},
@@ -26,10 +27,11 @@ type BoardCard struct {
 	Hp int `json:"hp,omitempty"`
 	Atk int `json:"atk,omitempty"`
 }
+
 type Board [BOARD_ROWS][BOARD_COLS]BoardCard
 
 type Player struct {
-	Board [BOARD_ROWS][BOARD_COLS]BoardCard `json:"board,omitempty"`
+	Board Board `json:"board,omitempty"`
 	CastleHealth int `json:"castleHealth,omitempty"`
 	Deck []string `json:"deck,omitempty"`
 	Hand []string `json:"hand,omitempty"`
@@ -61,12 +63,14 @@ type GameState struct {
 	Updates []GameStateUpdate
 }
 
-// Flat
+// Flat version of Game State (no nested structs)
 type StateUpdate struct {
 	PlayerNumber *int `json:"playerNumber,omitempty"`
 	Turn *int `json:"turn,omitempty"`
 	Player0Hand *[]string `json:"player0hand,omitempty"`
 	Player1Hand *[]string `json:"player1hand,omitempty"`
+	Player0Board *Board `json:"player0board,omitempty"`
+	Player1Board *Board `json:"player1board,omitempty"`
 	NumPlayers *int `json:"numPlayers,omitempty"`
 }
 
@@ -75,18 +79,22 @@ func flatten(game GameState) StateUpdate {
 	return StateUpdate{
 		Player0Hand: &game.Players[0].Hand,
 		Player1Hand: &game.Players[1].Hand,
+		Player0Board: &game.Players[0].Board,
+		Player1Board: &game.Players[1].Board,
 		Turn: &game.Turn,
 		NumPlayers: &game.NumPlayers,
 	}
 }
 
 func newPlayer() Player {
-	return Player{
-		Board: [2][5]BoardCard{},
+	p := Player{
+		Board: Board{},
 		CastleHealth: CASTLE_HEALTH,
 		Deck: make([]string, 0, DECK_SIZE),
 		Hand: make([]string, 0, HAND_SIZE),
 	}
+	p.Board[1][2] = newBoardCard("Sand Castle")
+	return p
 }
 
 type Pos struct {
@@ -199,14 +207,41 @@ func (state GameState) startTurn() GameState {
 	return state
 }
 
+func (state *GameState) update(u GameStateUpdate) {
+	state.Updates = append(state.Updates, u)
+}
+
+func validPos(pos Pos, board Board) error {
+	if pos.Col < 0 || pos.Col >= BOARD_COLS {
+		return Err{"Col out of bounds"}
+	}
+	if pos.Row < 0 || pos.Row >= BOARD_ROWS {
+		return Err{"Row out of bounds"}
+	}
+	return nil 
+}
+
 func (state GameState) playFromHand(index int, pos Pos) (GameState, error) {
 	player := state.Players[state.Turn]
 	if index < 0 || index >= len(player.Hand) {
 		return state, Err{"Index out of bounds"}
 	}
-	// todo check pos
+	err := validPos(pos, player.Board)
+	if err != nil {
+		return state, err
+	}
+
 	state.Players[state.Turn].Board[pos.Row][pos.Col] = newBoardCard(player.Hand[index])
+
 	state.Players[state.Turn].Hand = remove(player.Hand, index)
+
+	ns := updateHand(state, state.Turn)
+	ns.Player0Board = &state.Players[0].Board
+	state.update(GameStateUpdate{
+		Anim: Animation{Name: "hand to board"},	
+		NewState: ns,
+	})
+
 	return state, nil
 }
 
