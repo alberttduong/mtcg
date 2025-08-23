@@ -10,6 +10,13 @@ require (
 
 require github.com/gorilla/mux v1.8.1
 
-require github.com/rs/cors v1.11.1 // indirect
+require (
+	github.com/dgrijalva/jwt-go v3.2.0+incompatible // indirect
+	github.com/golang-jwt/jwt/v5 v5.3.0 // indirect
+	github.com/google/renameio v1.0.1 // indirect
+	github.com/profclems/go-dotenv v1.1.1 // indirect
+	github.com/rs/cors v1.11.1 // indirect
+	github.com/spf13/cast v1.9.2 // indirect
+)
 
 replace gserver => ../gserver

@@ -3,19 +3,30 @@ const {  createListenerMiddleware, createAction } = ((toolkitRaw as any).default
 
 import { Socket } from "./socket"
 
-type Msg = {
+export type Body = {
+	[key: string]: any
+}
+
+export type Msg = {
 	Msg: string | null,
 	Body: {
 		[key: string]: any
 	}
 }
 
-const connected = createAction<undefined>('connected')
-const send = createAction<Msg>('send')
+export type Response = {
+	StatusCode: number,
+	Msg: string | null,
+	Body: {
+		[key: string]: any
+	}
+}
 
 const listenerMiddleware = createListenerMiddleware()
-
 let socket = new Socket()
+
+const connected = createAction<undefined>('connected')
+const send = createAction<Msg>('send')
 
 listenerMiddleware.startListening({
 	actionCreator: connected,
@@ -42,5 +53,14 @@ listenerMiddleware.startListening({
 	}
 })
 
+function socketListener(callback: any) {
+	socket.on('message', callback)
+}
+
+function socketOn(event: string, callback: any) {
+	socket.on(event, callback)
+}
+
+export { socketListener, socketOn }
 export { listenerMiddleware }
 export { connected, send }

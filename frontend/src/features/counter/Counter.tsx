@@ -1,45 +1,60 @@
 import type { JSX } from "react"
 import { useState, useEffect } from "react"
-import { useAppDispatch } from "../../app/hooks"
+import { useSelector } from "react-redux"
+import { 
+	useAppDispatch, 
+	login,
+	logout,	
+	selectLoggedIn,
+} from "../../app/store"
 import styles from "./Counter.module.css"
 import { 
 	connected,
-	send
+	send,
 } from "../../app/middleware"
 import { default as axios } from "axios"
 import { CenterCol } from "../../styles"
 
 
-interface Card {
-	name: string,
-	index: number,
+interface Cards {
+	[name: string]: {
+		hp?: number	
+		atk?: number
+	}
 }
 
-interface DeckEntry {
-	index: number,
-	amount: number
+interface Deck {
+	[name: string]: number
 }
-
 
 export const Counter = (): JSX.Element => {
+	const loggedIn = useSelector(selectLoggedIn)
 	const dispatch = useAppDispatch()
-	dispatch(connected())
+	useEffect(() => {
+		dispatch(connected())
+		dispatch(login(undefined))
+	}, [])
 
 	const [msg, setMsg] = useState("")
 	const [body, setBody] = useState("{}")
-	const [cards, setCards] = useState<Card[]>([])
-	const [deck, setDeck] = useState<DeckEntry[]>([])
+	const [cards, setCards] = useState<Cards>({})
+	const [deck, setDeck] = useState<Deck>({})
 
 	async function getCards() {
 		axios.get('http://localhost:8080/cards')
 		.then((res) => {
-			let copy: Card[] = res.data 
-			for (let i=0; i<copy.length; i++) {
-				copy[i].index = i
-			}
-			console.log("copy")
-			console.log(copy)
-			setCards(copy)
+			setCards(res.data)
+		})
+		axios.get('http://localhost:8080/deck')
+		.then((res) => {
+			setDeck(res.data)
+		})
+	}
+
+	async function saveDeck() {
+		axios.put('http://localhost:8080/deck', deck)
+		.then((res) => {
+			console.log(res)
 		})
 	}
 
@@ -47,48 +62,65 @@ export const Counter = (): JSX.Element => {
 		getCards()
 	}, [])
 
-	function sortDeck(copy: DeckEntry[]) {
-		copy.sort((a, b) => {return a.index - b.index})	
-		console.log(deck)
-		setDeck(copy)
+	function removeCard(name: string) {
+		if (name in cards && name in deck) {
+			if (deck[name] == 1) {
+				const copy = deck
+				delete copy[name]
+				setDeck({...copy})
+			} else {
+				setDeck({
+					...deck,
+					[name]: deck[name] - 1
+				})
+			}
+		}
 	}
 
-	function removeCard(c: Card) {
-		const entry = deck.find((e) => {
-			return e.index === c.index
-		})
-		if (entry != undefined) {
-			let copy = deck.filter((e) => {return e.index != c.index})
-			entry.amount += 1
-			copy = [...copy, entry]
-			sortDeck(copy)
-		} else {
-			let copy = [...deck, {index: c.index, amount: 1}]
-			sortDeck(copy)
+	function addCard(name: string) {
+		if (name in cards) {
+			setDeck({
+				...deck,
+				[name]: name in deck? deck[name]+1 : 1
+			})
 		}
 	}
 
 	return (<div className={CenterCol}>
+		{"Logged in: "}{loggedIn ? "true" : "false"}
 		<label>Cards</label>
-		{ cards.map((c, key) => {
-			return <div className="bg-gray-100 flex flex-row self-center w-md justify-between items-center" key={key}>
-				<button className="sm-square" onClick={() => removeCard(c)}>
-					-
-				</button>
-				{c.name}
-				<button className="sm-square">+</button>
+		{ Object.keys(cards).map((name: string)=> {
+			return <div className="bg-gray-100 flex flex-row self-center w-xs justify-between items-center" key={name}>
+				<label className="text-center w-full">{name}</label>
+				<div className="flex">
+					<button className="sm-square" onClick={() => removeCard(name)}>-</button>
+					<button className="sm-square" onClick={() => addCard(name)}>+</button>
+				</div>
 			</div>
 		})}
 		
+		<button className="sm-square" onClick={ () => {
+				dispatch(login({username: 'Bill'}))
+			}
+		}>Login</button>
+		<button className="sm-square" onClick={ () => {
+				dispatch(logout())
+			}
+		}>Logout</button>
+		
 		<label>Deck</label>
-		{ deck.map((entry, key) => {
-			return <div key={key}>
-				{cards[entry.index].name}{' '}
-				x{entry.amount}
+		{ Object.keys(deck).map((name: string)=> {
+			return <div key={name}>
+				{name}{' '}
+				x{deck[name]}
 			</div>
 		})}
 
-		<button className="">Save</button>
+		<button className="" onClick={() => {
+				saveDeck()
+			}}>
+			Save
+		</button>
 
 		<div className={styles.row}>
 			<input type="text"
