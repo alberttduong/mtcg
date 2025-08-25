@@ -105,6 +105,15 @@ func broadcastStatesToClients(lobby *gserver.Lobby, master StateUpdate) {
 	}
 }
 
+func broadcastUpdates(lobby *gserver.Lobby, updates []GameStateUpdate) {
+	body := map[string]interface{}{"updates": updates}
+	lobby.Broadcast(gserver.Msg{
+		Msg: "update game",
+		StatusCode: 0,
+		Body: body,
+	})
+}
+
 func execute(client *gserver.Client, server *gserver.Server, msg gserver.Msg) error {
 	if gserver.ReceiveLobbyCommands(client, server, msg) {
 		return nil
@@ -112,6 +121,9 @@ func execute(client *gserver.Client, server *gserver.Server, msg gserver.Msg) er
 	if gserver.ReceiveChatCommands(client, server, msg) {
 		return nil
 	}
+
+	lobby := client.Lobby
+
 	response := gserver.MakeResponse(msg)
 	switch msg.Msg {
 	case "start game":
@@ -125,6 +137,9 @@ func execute(client *gserver.Client, server *gserver.Server, msg gserver.Msg) er
 			response.Error("Game already started")
 			break
 		}
+
+		lobby.AssignPlayers()
+
 		// todo check if there are enough players
 		playerDecks := map[int]DeckMap{
 			0: { "Gunner": 3, "Blaster": 3 },
@@ -132,14 +147,12 @@ func execute(client *gserver.Client, server *gserver.Server, msg gserver.Msg) er
 		}
 
 		newGame, _ := newGameState(2).initDecks(playerDecks)
-		newGame = newGame.drawCards()
-
-		lobby := client.Lobby
-		lobby.AssignPlayers()
-		client.Lobby.UpdateState("game", newGame)
-		client.Lobby.UpdateState("started", true)
+		newGame, _ = newGame.drawCards().startTurn().clearUpdates()
 
 		broadcastStartGame(lobby, newGame)
+		
+		client.Lobby.UpdateState("game", newGame)
+		client.Lobby.UpdateState("started", true)
 	case "end turn":
 		s, _ := client.Lobby.GetState("game")
 		game := s.(GameState)
@@ -175,6 +188,53 @@ func execute(client *gserver.Client, server *gserver.Server, msg gserver.Msg) er
 		}
 
 		
+		game, updates := game.clearUpdates()
+		client.Lobby.UpdateState("game", game)
+
+		updateMsg := msg
+		updateMsg.Msg = "update game"
+		updateMsg.StatusCode = 0
+		updateMsg.Body["updates"] = updates 
+		
+		client.Lobby.Broadcast(updateMsg)
+	case "attack":
+		var atkRow, atkCol, defRow, defCol, defPlayer int
+
+		type Param struct {
+			key string
+			dest *int
+		}
+
+		params := []Param{
+			{"atkRow", &atkRow},
+			{"atkCol", &atkCol}, 
+			{"defRow", &defRow}, 
+			{"defCol", &defCol}, 
+			{"defPlayer", &defPlayer},
+		}
+
+		for _, p := range params {
+			err := gserver.CheckNumber(msg, p.key, p.dest)
+			if err != nil {
+				response.Error(err.Error())
+				break
+			}
+		}
+		
+		s, ok := client.Lobby.GetState("game")
+		if !ok {
+			response.Error("err in getting the game")
+			break
+		}
+		game := s.(GameState)
+
+		game, err := game.attack(Pos{atkRow, atkCol}, 
+			Pos{defRow, defCol}, defPlayer)
+		if err != nil {
+			response.Error("err in getting the game")
+			break
+		}
+
 		game, updates := game.clearUpdates()
 		client.Lobby.UpdateState("game", game)
 

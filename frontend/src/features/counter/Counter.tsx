@@ -15,12 +15,13 @@ import {
 import { default as axios } from "axios"
 import { CenterCol } from "../../styles"
 
+export interface CardInfo {
+	hp?: number	
+	atk?: number
+}
 
-interface Cards {
-	[name: string]: {
-		hp?: number	
-		atk?: number
-	}
+export interface Cards {
+	[name: string]: CardInfo
 }
 
 interface Deck {
@@ -89,6 +90,7 @@ export const Counter = (): JSX.Element => {
 	return (<div className={CenterCol}>
 		{"Logged in: "}{loggedIn ? "true" : "false"}
 		<label>Cards</label>
+		<div className="overflow-scroll h-[60vh]">
 		{ Object.keys(cards).map((name: string)=> {
 			return <div className="bg-gray-100 flex flex-row self-center w-xs justify-between items-center" key={name}>
 				<label className="text-center w-full">{name}</label>
@@ -98,6 +100,7 @@ export const Counter = (): JSX.Element => {
 				</div>
 			</div>
 		})}
+		</div>
 		
 		<button className="sm-square" onClick={ () => {
 				dispatch(login({username: 'Bill'}))
@@ -121,29 +124,5 @@ export const Counter = (): JSX.Element => {
 			}}>
 			Save
 		</button>
-
-		<div className={styles.row}>
-			<input type="text"
-			value={msg}
-			onChange={(e) => {
-			setMsg(e.target.value)
-			}
-			}/>
-			<input type="text"
-			value={body}
-			onChange={(e) => {
-			setBody(e.target.value)
-			}
-			}/>
-			<button
-			className={styles.button}
-			aria-label="Send"
-			onClick={() => {
-			const bodyObject = JSON.parse(body)
-			dispatch(send({Msg: msg, Body: bodyObject}))
-			}} >
-			+
-			</button>
-		</div>
 	</div>)
 }

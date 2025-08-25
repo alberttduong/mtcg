@@ -1,5 +1,7 @@
 class Socket {
   socket: WebSocket | null
+  listening: any
+
   constructor() {
     this.socket = null
   }
@@ -25,7 +27,9 @@ class Socket {
 
   on(eventName: string, callback: any) {
     if (this.socket) {
+	  this.socket.removeEventListener(eventName, this.listening)
       this.socket.addEventListener(eventName, callback)
+	  this.listening = callback
     }
   }
 }

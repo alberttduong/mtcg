@@ -1,24 +1,57 @@
 package main
 
+import (
+)
+
 const (
 	CASTLE_HEALTH = 10
 	BOARD_COLS = 5
 	BOARD_ROWS = 2
 	DECK_SIZE = 30
-	HAND_SIZE= 30
+	HAND_SIZE = 30
 )
+
 
 type DeckMap map[string]int
 
 type Card struct {
 	Hp int `json:"hp,omitempty"`
 	Atk int `json:"atk,omitempty"`
+	Cost int
 }
 
+// Deck: 30, ~7x Unique Cards (4 each)
+// Goal: 35 Cards (7/35)
 var Cards = map[string]Card {
-	"Sand Castle": {Hp: 10},
+	"Sand Castle": {Hp: 10}, // Sand Castle
+	"Bubble Blower": {Hp: 2, Atk: 3}, // Fighters
+	"Splashy": {Hp: 2, Atk: 3},
 	"Gunner": {Hp: 1, Atk: 2},
+	"Bucket Boy": {Hp: 2, Atk: 3},
+	"Ballooner": {Hp: 2, Atk: 3},
+	"Launcher": {Hp: 2, Atk: 3},
 	"Blaster": {Hp: 2, Atk: 3},
+	"Builder": {Hp: 2, Atk: 3},
+	"Shoveller": {Hp: 2, Atk: 3},
+	"Sculptor": {Hp: 2, Atk: 3}, // 1 cost
+	"Shieldbearer": {Hp: 2, Atk: 3},
+	"Catapulter": {Hp: 2, Atk: 3},
+	"Cannoneer": {Hp: 2, Atk: 3},
+	"Surfer": {Hp: 2, Atk: 3},
+	"Balloon Pitcher": {Hp: 2, Atk: 3},
+	"Castle Crusher": {Hp: 2, Atk: 3}, // 2 cost
+	"Super Soaker": {Hp: 2, Atk: 3},
+	"Super Squirter": {Hp: 2, Atk: 3},
+	"Shark": {Hp: 2, Atk: 3}, // 3 cost
+	"Sand Monster": {Hp: 2, Atk: 3},
+	"Little Castle": {Hp: 2, Atk: 3}, // Sand
+	"Sand Wall": {Hp: 2, Atk: 3},
+	"Sculpture": {Hp: 2, Atk: 3},
+	"Buried Friend": {Hp: 2, Atk: 3},
+	"Battlements": {Hp: 2, Atk: 3},
+	"Moat": {Hp: 2, Atk: 3},
+	"Twisted Tower": {Hp: 2, Atk: 3},
+	"Tank": {Hp: 2, Atk: 3},
 	"Sandy Fortress": {Hp: 4},
 }
 
@@ -35,6 +68,7 @@ type Player struct {
 	CastleHealth int `json:"castleHealth,omitempty"`
 	Deck []string `json:"deck,omitempty"`
 	Hand []string `json:"hand,omitempty"`
+	lost bool
 }
 
 type PlayerUpdate struct {
@@ -44,6 +78,8 @@ type PlayerUpdate struct {
 type Animation struct {
 	Name string `json:"name"`
 	Player int `json:"player"`
+	Pos1 []int `json:"pos1,omitempty"`
+	Pos2 []int `json:"pos2,omitempty"`
 }
 
 func (anim Animation) IsZero() bool {
@@ -61,6 +97,8 @@ type GameState struct {
 	Turn int `json:"turn"`
 	NumPlayers int `json:"numPlayers"`
 	Updates []GameStateUpdate
+	Mana int `json:"mana"`
+	maxMana int
 }
 
 // Flat version of Game State (no nested structs)
@@ -71,18 +109,28 @@ type StateUpdate struct {
 	Player1Hand *[]string `json:"player1hand,omitempty"`
 	Player0Board *Board `json:"player0board,omitempty"`
 	Player1Board *Board `json:"player1board,omitempty"`
+	Player0Deck *int `json:"player0deck,omitempty"`
+	Player1Deck *int `json:"player1deck,omitempty"`
 	NumPlayers *int `json:"numPlayers,omitempty"`
+	Mana *int `json:"mana,omitempty"`
 }
 
 // Flattens entire nested object game state for React
 func flatten(game GameState) StateUpdate {
+	p0 := game.Players[0]
+	p1 := game.Players[1]
+	p0d := len(p0.Deck)
+	p1d := len(p1.Deck)
 	return StateUpdate{
 		Player0Hand: &game.Players[0].Hand,
 		Player1Hand: &game.Players[1].Hand,
 		Player0Board: &game.Players[0].Board,
 		Player1Board: &game.Players[1].Board,
+		Player0Deck: &p0d,
+		Player1Deck: &p1d,
 		Turn: &game.Turn,
 		NumPlayers: &game.NumPlayers,
+		Mana: &game.Mana,
 	}
 }
 
@@ -152,6 +200,19 @@ func (state GameState) initDecks(playerDecks map[int]DeckMap) (newState GameStat
 	return state, nil
 }
 
+func (u StateUpdate) updateDeck(state GameState, player int) StateUpdate {
+	length := len(state.Players[player].Deck)
+	switch player {
+	case 0:
+		u.Player0Deck = &length
+	case 1:
+		u.Player1Deck = &length
+	default:
+		panic("")
+	}
+	return u
+}
+
 func (state GameState) draw(player int) (GameState, error) {
 	deck := state.Players[player].Deck;
 	if len(deck) == 0 {
@@ -161,6 +222,9 @@ func (state GameState) draw(player int) (GameState, error) {
 	hand = append(hand, deck[len(deck)-1])
 	state.Players[player].Deck = deck[:len(deck)-1]
 	state.Players[player].Hand = hand
+	state.update(GameStateUpdate{
+		NewState: SU().updateDeck(state, player),
+	})
 	return state, nil
 }
 
@@ -177,15 +241,49 @@ func (state GameState) drawCards() GameState {
 	return state
 }
 
+func (u StateUpdate) updateMana(state GameState) StateUpdate {
+	mana := state.Mana
+	u.Mana = &mana
+	return u
+}
+
+func (u StateUpdate) updateTurn(turn int) StateUpdate {
+	u.Turn = &turn
+	return u
+}
+
 // Precondition: player is valid
-func updateHand(state GameState, player int) StateUpdate {
-	u := StateUpdate{}
-	newHand := &state.Players[player].Hand
+func (u StateUpdate) updateHand(state GameState, player int) StateUpdate {
+	newHand := []string{}
+	for _, card := range state.Players[player].Hand {
+		newHand = append(newHand, card)
+	}
+
 	switch player {
 	case 0:
-		u.Player0Hand = newHand
+		u.Player0Hand = &newHand
 	case 1:
-		u.Player1Hand = newHand
+		u.Player1Hand = &newHand
+	default:
+		panic("No player")
+	}
+	return u
+}
+
+func (u StateUpdate) updateBoard(state GameState, player int) StateUpdate {
+	newb := Board{}
+
+	for i, row := range state.Players[player].Board {
+		for j, card := range row {
+			newb[i][j] = card
+		}
+	}
+
+	switch player {
+	case 0:
+		u.Player0Board = &newb
+	case 1:
+		u.Player1Board = &newb
 	default:
 		panic("No player")
 	}
@@ -194,6 +292,11 @@ func updateHand(state GameState, player int) StateUpdate {
 
 func (state GameState) startTurn() GameState {
 	var err error
+	if state.Turn % state.NumPlayers == 0 {
+		state.maxMana += 1
+	}
+	state.Mana = state.maxMana
+
 	state, err = state.draw(state.Turn)
 	if err == nil {
 		state.Updates = append(state.Updates, GameStateUpdate{
@@ -201,9 +304,14 @@ func (state GameState) startTurn() GameState {
 				Name: "draw",
 				Player: state.Turn,
 			},
-			NewState: updateHand(state, state.Turn),
+			NewState: SU().updateHand(state, state.Turn),
 		}) 
 	}
+
+	state.update(GameStateUpdate{
+		Anim: Animation{ Name: "gain mana"},
+		NewState: SU().updateMana(state)}) 
+
 	return state
 }
 
@@ -221,6 +329,10 @@ func validPos(pos Pos, board Board) error {
 	return nil 
 }
 
+func SU() StateUpdate {
+	return StateUpdate{}
+}
+
 func (state GameState) playFromHand(index int, pos Pos) (GameState, error) {
 	player := state.Players[state.Turn]
 	if index < 0 || index >= len(player.Hand) {
@@ -235,8 +347,7 @@ func (state GameState) playFromHand(index int, pos Pos) (GameState, error) {
 
 	state.Players[state.Turn].Hand = remove(player.Hand, index)
 
-	ns := updateHand(state, state.Turn)
-	ns.Player0Board = &state.Players[0].Board
+	ns := SU().updateHand(state, state.Turn).updateBoard(state, state.Turn)
 	state.update(GameStateUpdate{
 		Anim: Animation{Name: "hand to board"},	
 		NewState: ns,
@@ -245,17 +356,75 @@ func (state GameState) playFromHand(index int, pos Pos) (GameState, error) {
 	return state, nil
 }
 
+// doesnt check case where all players have lost somehow
+func (state GameState) getWinner() int {
+	playersIn := 0
+	winner := -1
+	
+	for p, player := range state.Players {
+		if !player.lost {
+			playersIn += 1
+			if playersIn > 1 {
+				return -1
+			}
+			winner = p
+		}
+	}
+
+	return winner
+}
+
 func (state GameState) attack(atkr Pos, dfr Pos, player int) (GameState, error) {
 	// todo error check
 	attacker := state.Players[state.Turn].Board[atkr.Row][atkr.Col]
-	state.Players[player].Board[dfr.Row][dfr.Col].Hp -= attacker.Atk
+	defender := &(state.Players[player].Board[dfr.Row][dfr.Col])
+
+	defender.Hp -= attacker.Atk
+	if (defender.Hp <= 0) {
+		defender.Hp = 0
+	}
+
+	state.update(GameStateUpdate{
+		Animation{
+			Name: "attack",
+			Pos1: []int{atkr.Row, atkr.Col, state.Turn},
+			Pos2: []int{dfr.Row, dfr.Col, player},
+		},
+		SU().updateBoard(state, player),
+	})
+
+	if (defender.Hp == 0) {
+		if defender.Name == "Sand Castle" {
+			state.Players[player].lost = true
+		}
+
+		*defender = BoardCard{}
+
+		state.update(GameStateUpdate{
+			Animation{
+				Name: "death",
+				Pos1: []int{dfr.Row, dfr.Col, player},
+			},
+			SU().updateBoard(state, player),
+		})
+	}
+
+	if winner := state.getWinner(); winner != -1 {
+		state.update(GameStateUpdate{
+			Animation{
+				Name: "win",
+				Player: winner,
+			},
+			SU(),
+		})
+
+	}
+
 	return state, nil
 }
 
 func (state GameState) endTurn() (GameState, error) {
 	state.Turn = (state.Turn + 1) % state.NumPlayers
-	state.Updates = append(state.Updates, GameStateUpdate{
-		NewState: StateUpdate{Turn: &state.Turn},
-	})
+	state.update(GameStateUpdate{NewState: SU().updateTurn(state.Turn)})
 	return state, nil
 }

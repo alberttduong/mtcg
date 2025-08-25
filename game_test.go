@@ -37,6 +37,13 @@ func TestGame(t *testing.T) {
 		t.Error("Expected a gsupdate")
 	}
 
+	if state.Mana != 1 {
+		t.Errorf("expected 1 mana, got %d", state.Mana)
+	}
+	if state.maxMana != 1 {
+		t.Errorf("expected 1 maxmana, got %d", state.Mana)
+	}
+
 	state, err = state.playFromHand(0, Pos{0,0})
 	if err != nil {
 		t.Error(err)
@@ -48,6 +55,21 @@ func TestGame(t *testing.T) {
 
 	// PLAYER 1 PLAY AND ATTACK
 	state, _ = state.endTurn()
+	state = state.startTurn()
 	state, _ = state.playFromHand(0, Pos{0,0})
 	state, _ = state.attack(Pos{0,0}, Pos{0,0}, 0)
+	//fmt.Println(state.Updates)
+	state, _ = state.endTurn()
+	state = state.startTurn()
+
+	if state.maxMana != 2 {
+		t.Errorf("expected 2 maxmana, got %d", state.Mana)
+	}
+
+	if state.Mana != 2 {
+		t.Errorf("expected 2 mana, got %d", state.Mana)
+	}
+
+	state.Players[1].lost = true
+	println(state.getWinner())
 }

@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client"
 import { Provider } from "react-redux"
 import { Counter } from "@/features/counter/Counter"
 import { Game } from "@/features/game/Game"
+import { Home } from "@/features/home/Home"
 import { store } from "./app/store"
 import "./index.css"
 import { CenterCol } from "@/styles"
@@ -18,6 +19,7 @@ if (root) {
 			<Routes>
 				<Route path="/deck" element={<Counter />} />
 				<Route path="/" element={<Game />} />
+				<Route path="/home" element={<Home/>} />
 			</Routes>
 			</div>
 		</Provider>

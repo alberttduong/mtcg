@@ -1,5 +1,5 @@
 import type { JSX } from "react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { 
 	useAppDispatch, 
 } from "../../app/store"
@@ -13,13 +13,18 @@ import {
 import { 
 	GameComponent,
 	animation,
+	CardHovered
 } from "./GameComponent"
 import {
-	Chat
+	Chat,
+	Lobby
 } from "./Lobby"
 import {
 	Popup
 } from "@/features/component/popup"
+import { default as axios } from "axios"
+import { Cards } from "@/features/counter/Counter"
+import { CardInfo} from "@/features/counter/CardInfo"
 
 export interface Card {
 	name: string
@@ -28,18 +33,38 @@ export interface Card {
 }
 
 export interface GameState {
-	turn?: number
+	turn: number
 	numPlayers?: number 
-	playerNumber?: number 
-	player0hand?: string[]
-	player1hand?: string[]
-	player0board?: Card[][]
-	player1board?: Card[][]
+	playerNumber: number 
+	player0hand: string[]
+	player1hand: string[]
+	player0board: Card[][]
+	player1board: Card[][]
+	player0deck: number
+	player1deck: number
+	mana: number
+}
+
+function newGameState(): GameState {
+	let board: Card[][] = []
+	return {
+		playerNumber: 0,
+		player0hand: [],
+		player1hand: [],
+		player0board: board,
+		player1board: board,
+		player0deck: 0,
+		player1deck: 0,
+		turn: 0,
+		mana: 0,
+	}
 }
 
 interface Animation {
 	name: string,
-	player: number 
+	player?: number 
+	pos1: number[] | undefined
+	pos2: number[] | undefined
 }
 
 interface GameStateUpdate {
@@ -47,17 +72,64 @@ interface GameStateUpdate {
 	newState: GameState
 }
 
+function playerToBoard(player: number, state: GameState)
+: Card[][] | undefined {
+	switch (player) {
+	case 0:
+		return state.player0board
+	case 1:
+		return state.player1board
+	default:
+		return undefined
+	}
+}
+
+function CardView(props: any) {
+	const card: CardHovered = props.cardHovered
+	const cards: Cards = props.cards
+	const state: GameState = props.state
+	let boardCard: Card | undefined = undefined
+	if (card && card.location == "board" 
+		&& card.row !== undefined
+		&& card.col !== undefined) {
+		const board = playerToBoard(card.player, state)
+		if (board ) {
+			const c = board[card.row][card.col]
+			if (c.name) {
+				boardCard = c
+			}
+		}
+	}
+
+
+	return <div className="w-[250px] h-[200px] fixed left-0 bottom-0 bg-gray-100">
+		{card && card.location == "hand" &&
+			<CardInfo name={card.name} info={cards[card.name]}/>
+		}
+		{card && card.location == "board" && boardCard && <>
+			<h1>{boardCard.name} (Player {card.player})</h1>
+			<h1>HP {boardCard.hp}</h1>
+			<h1>ATK {boardCard.atk || "0"}</h1>
+			<br/>
+			<h1>@r{card.row}c{card.col}</h1>
+		</>}
+	</div>
+}
+
 export const Game = (): JSX.Element => {
 	const dispatch = useAppDispatch()
-	const [state, setState] = useState<GameState>({})
+	const [state, setState] = useState<GameState>(newGameState())
 	const [msg, setMsg] = useState("")
 	const [body, setBody] = useState("{}")
 	const [started, setStarted] = useState(false)
 	const [lobby, setLobby] = useState(-1)
-	const [chat, setChat] = useState<string[]>(["hi", "yo"])
+	const [chat, setChat] = useState<string[]>([])
 	const [lobbyList, setLobbyList] = useState("")
 	const [popupOpen, setPopupOpen] = useState(false)
 	const [popupText, setPopupText] = useState("")
+	const [cardHovered, setCardHovered] = useState<CardHovered>()
+
+	let cards = useRef<Cards>({})
 
 	function newPopup(text: string) {
 		setPopupText(text)
@@ -69,11 +141,43 @@ export const Game = (): JSX.Element => {
 		dispatch(send(newMsg))
 	}
 
-	async function updateGame(u: GameStateUpdate) {
-		const newState = {...state}
+function sleep(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+	async function updateGame(u: GameStateUpdate, 
+							  newState: GameState) {
 
-		if (u.anim && u.anim.name == "draw") {
-			await animation.drawCard(u.anim.player)
+		if (u.anim) {
+			await sleep(1)
+			switch (u.anim.name) {
+			case "draw":
+				if (u.anim.player) {
+					await animation.drawCard(u.anim.player)
+				}
+				break
+			case "attack":
+				if (u.anim.pos1 && u.anim.pos2) {
+					await animation.attack(u.anim.pos1, u.anim.pos2)
+					await sleep(1)
+					await animation.takeDamage(u.anim.pos2)
+				} else {
+					console.log("error in attack")
+				}
+				break
+			case "death":
+				if (u.anim.pos1) {
+					await animation.die(u.anim.pos1)
+				}
+				break
+			case "gain mana":
+				console.log('got mana')
+				break
+			case "win":
+				newPopup("Player " + u.anim.player + " won the game")
+				break
+			default:
+				console.log("no animation for " + u.anim) 
+			}
 		}
 
 		const update = u.newState
@@ -82,7 +186,7 @@ export const Game = (): JSX.Element => {
 			newState[key] = v
 		}
 
-		setState(newState)
+		return newState
 	}
 
 	useEffect(() => {
@@ -91,6 +195,11 @@ export const Game = (): JSX.Element => {
 		socketOn('open', () => {
 			//sendMsg("create lobby")
 			//sendMsg("start game")
+		})
+
+		axios.get('http://localhost:8080/cards')
+		.then((res) => {
+			cards.current = res.data
 		})
 	}, [])
 
@@ -128,6 +237,7 @@ export const Game = (): JSX.Element => {
 				if (res.StatusCode != 0)
 					break	
 
+				console.log('starting game')
 				const s: GameState = res.Body.state
 				setStarted(true)
 				setState(s)
@@ -139,9 +249,16 @@ export const Game = (): JSX.Element => {
 				break
 			case "update game":
 				const updates = res.Body.updates
-				updates.forEach((u: GameStateUpdate) => {
-					updateGame(u)
-				})
+				//console.log(JSON.stringify(updates))
+
+				let newState = {...state}
+				const update = async () => {
+					for (const u of updates) {
+						newState = await updateGame(u, newState)
+					}
+					setState(newState)
+				}
+				update()
 				break
 			default:
 				if (res.StatusCode == 0)
@@ -150,75 +267,29 @@ export const Game = (): JSX.Element => {
 		})
 	}, [state, chat])
 
-	function createLobby() {
-		dispatch(send({Msg: "create lobby", Body: {}}))
-	}
-
-	function leaveLobby() {
-		sendMsg("leave lobby", {lobbyId: 1})
-	}
-
-	function joinLobby() {
-		sendMsg("join lobby", {lobbyId: 1})
-	}
-
-	function startGame() {
-		sendMsg("start game")
-	}
-
 	return <div>
 		<Popup 
 			isOpen={popupOpen} setIsOpen={setPopupOpen}
 			text={popupText}
 			/>
-		<div className="bg-gray-100">
-		<label>Your Lobby: {lobby > 0 ? lobby : "None"}</label>
-		<div>{lobbyList}</div>
-		</div>
-		<div className="flex">
-			{lobby > 0 && <div className="flex-col">
-				<div className="flex flex-row">
-					<button onClick={leaveLobby}>Leave Lobby</button>
-					<button onClick={startGame}>Start game</button>
-				</div>
-				<Chat chat={chat} sendChat={(msg: string) => {
-					sendMsg("chat send", {msg: msg})
-				}}/>
-			</div> || <>
-				<button onClick={createLobby}>Create Lobby</button>
-				<button onClick={joinLobby}>Join Lobby</button>
-			</>}
-		</div>
 
-		{started && <GameComponent state={state} sendMsg={sendMsg}/>}
-		{state.player0board?.map((a) => {
-			return a?.map((b) => {
-				return b.name
-			})
-		})}
+		<Lobby
+			className="z-4 fixed top-0 left-0"
+			lobby={lobby}
+			chat={chat}
+			sendMsg={sendMsg} />
 
-		<div className="flex">
-			<input type="text"
-				value={msg}
-				onChange={(e) => {
-					setMsg(e.target.value)
-				}
-			}/>
-			<input type="text"
-				value={body}
-				onChange={(e) => {
-					setBody(e.target.value)
-				}
-			}/>
-			<button
-				aria-label="Send"
-				onClick={() => {
-					const bodyObject = JSON.parse(body)
-					dispatch(send({Msg: msg, Body: bodyObject}))
-				}
-			}>
-			+
-			</button>
-		</div>
+		<CardView 
+			state={state}
+			cards={cards.current}
+			cardHovered={cardHovered}/>
+
+		{started &&
+		<GameComponent 
+			setCardHovered={setCardHovered}
+			className="fixed right-0" 
+			game={state} sendMsg={sendMsg}/>}
+
+
 	</div>
 }
