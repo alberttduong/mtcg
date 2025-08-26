@@ -1,7 +1,8 @@
 import { GameState } from "./Game"
 import { useState, useEffect } from "react"
-import { boardCard, handStyle, handCard, gridCard,
-	absCenter
+import { boardCard, handCard, gridCard,
+	absCenter,
+	absCenterY,
 } from "./styles"
 import {
 	socketListener,
@@ -19,11 +20,6 @@ import { motion, animate,
 import type {
 	Card
 } from "./Game"
-
-
-export async function drawCard(player: number) {
-	return
-}
 
 function getBoardXY(pos: number[]): string[] | null {
 	const elm = document.getElementById(`board-${pos[0]}-${pos[1]}-${pos[2]}`)
@@ -103,26 +99,75 @@ export async function takeDamage(pos: number[]) {
 }
 
 export const animation = {
-	drawCard: drawCard,
 	attack: attack,
 	die: die,
 	takeDamage: takeDamage,
 }
 
-function myHand(game: GameState) {
-	let hand
-	switch (game.playerNumber) {
-	case 0:
-		hand = game.player0hand
-		break
-	case 1:
-		hand = game.player1hand
-		break
-	default:
-		return
-	}
-	return hand
-}
+function Hands(props: {
+	game: GameState, 
+	hoverBoard: number[],
+	sendMsg: (msg: string, body?: any) => void,
+	setCardHovered: (a: CardHovered) => void,
+}) {
+	const {
+		game,
+		hoverBoard,
+		sendMsg,
+		setCardHovered
+	} = props
+
+	const players = getAllPlayers(game)
+	const opponentHandStyles = [
+		absCenter + " top-0", // TOP
+		absCenterY + ` left-0 flex-col `, // LEFT
+		absCenterY + " right-0 flex-col", // RIGHT 
+	]
+	const oppCardStyles = [
+		"",
+		" mr-0 ml-0 -mb-5 -mt-5 ",
+		" mr-0 ml-0 -mb-5 -mt-5 ",
+	]
+
+	let currentOpponent = -1
+	return (<> { players.map((player: Player, i: number) => {
+		let handStyle = absCenter + " bottom-0 "
+		let cardStyle = ""
+
+		let yourHandProps: {
+			onDragEnd?: (i:number)=>void
+			setCardHovered?: (a:CardHovered)=>void
+		} = {}
+
+		if (player.number != game.playerNumber) {
+			currentOpponent += 1
+			handStyle = opponentHandStyles[currentOpponent]
+			cardStyle = oppCardStyles[currentOpponent]
+		} else {
+			yourHandProps.onDragEnd = (i: number) => {
+				if (hoverBoard[0] != -1 && 
+					hoverBoard[1] != -1 &&
+					hoverBoard[2] == game.playerNumber) {
+					sendMsg("play hand", {
+						"index": i,
+						"r": hoverBoard[0],
+						"c": hoverBoard[1],
+					})
+				}
+			}
+			yourHandProps.setCardHovered = setCardHovered
+		}
+		return <Hand 
+				{...yourHandProps}
+
+				className={handStyle}
+				cardClassName={cardStyle}
+				hand={players[player.number].hand} 
+				player={player.number}
+				key={i} 
+			/>
+	})}</>)
+}	
 
 function OtherPlayers(props: any) {
 	const game: GameState = props.state
@@ -136,16 +181,6 @@ function OtherPlayers(props: any) {
 	players.splice(game.playerNumber, 1)
 
 	return <div>
-		{otherHands.map((hand, i) => {
-			return <Hand 
-				hand={hand} 
-				player={players[i]}
-				key={i} 
-				className={
-					"top-0 " +
-					absCenter
-				}/>
-		})}
 		{players.map((p, i) => {
 			return <div 
 				id={"deck-"+p} 
@@ -160,15 +195,6 @@ function OtherPlayers(props: any) {
 }
 
 
-interface HandProps {
-	hand?: string[],
-	player?: number,
-	onClick?: (arg0:number) => void,
-	onDragEnd?: (arg0:number) => void,
-	className?: string,
-	setCardHovered?: (arg: CardHovered) => void,
-}
-
 export interface CardHovered {
 	name: string
 	player: number
@@ -177,12 +203,23 @@ export interface CardHovered {
 	col?: number
 }
 
+interface HandProps {
+	hand?: string[],
+	player?: number,
+	onClick?: (arg0:number) => void,
+	onDragEnd?: (arg0:number) => void,
+	className?: string,
+	cardClassName?: string,
+	setCardHovered?: (arg: CardHovered) => void,
+}
+
 function Hand(props: HandProps) {
 	const {
 		hand, 
 		player, 
 		onDragEnd, 
 		className,
+		cardClassName,
 		setCardHovered,
 	} = props;
 
@@ -194,19 +231,15 @@ function Hand(props: HandProps) {
 		{hand && hand.map((card, i) => {
 			return (
 			<motion.div
-				drag
-				layout
-				dragElastic={0}
-				dragSnapToOrigin
+				className={handCard + cardClassName} key={i} 
+				drag layout dragElastic={0} dragSnapToOrigin
 				onDragEnd={() => {if (onDragEnd) {
 					onDragEnd(i)
 				}}}
-				//onClick={() => {if (onClick) onClick(i)}}
-				key={i} 
-				className={handCard}
 				initial={{
 					width: 0,
-					color: "rgba(0, 0, 0, 0)"
+					color: "rgba(0, 0, 0, 0)",
+					zIndex: i,
 				}}
 				animate={{
 					width: 60,
@@ -223,6 +256,7 @@ function Hand(props: HandProps) {
 				}}
 				whileHover={{
 					y: -4,
+					zIndex: 10,
 					transition: { duration: 0.2 },
 				}}
 			>
@@ -238,6 +272,7 @@ interface BoardEventsProps {
 	className?: string
 	setHover: (arg: number[]) => void
 	setCardHover: (arg: CardHovered) => void
+	selectedBoard: number[]
 	setSelectedBoard?: (arg: number[]) => void
 	player: number
 	selectAttack: number[]
@@ -245,6 +280,48 @@ interface BoardEventsProps {
 	board: Card[][]
 	opponent?: number
 }
+
+
+function GridBoard(props: {
+	opponent?: number, 
+	className?: string,
+	render: (i: number, j: number) => any,
+}) {
+	const { 
+		opponent, 
+		className, 
+		render,
+	} = props
+
+	let columnStyle = " flex flex-col"
+	let rowStyle = " flex"
+	if (opponent === 0) {
+		columnStyle = " flex flex-col-reverse"
+		rowStyle = " flex flex-row-reverse"
+	}
+	if (opponent === 1) {
+		columnStyle = " flex flex-row-reverse"
+		rowStyle = " flex flex-col"
+	}
+	if (opponent === 2) {
+		columnStyle = " flex flex-row"
+		rowStyle = " flex flex-col-reverse"
+	}
+	return <>
+		<div className={className + columnStyle}>
+			{[...Array(2)].map((_u, i) => {
+				return <div className={rowStyle} key={i}>
+					{
+						[...Array(5)].map((_u, j) => {
+							return render(i, j)
+						})
+					}
+				</div>
+			})}
+		</div>
+	</>
+}
+
 
 function BoardEvents(props: BoardEventsProps) {
 	const { 
@@ -257,47 +334,46 @@ function BoardEvents(props: BoardEventsProps) {
 		player,
 		board,
 		opponent,
+		selectedBoard,
 	} = props
-	return <div className={className}>{
-		[...Array(2)].map((_u, index) => {
-			return <div className="flex" key={index}> {
-				[...Array(5)].map((_u, jindex) => {
-					let i = index
-					let j = jindex
-					if (opponent === 0) {
-						i = Math.abs(i-1)
-						j = Math.abs(j-4)
-					}
-					return (<motion.div 
-						className={gridCard} 
-						transition={{duration:0}}
-						onMouseEnter={ () => {
-							setHover([i,j, player])
-							setCardHover({
-								name: "",
-								player: player,
-								location: "board",
-								row: i,
-								col: j,
-							})
-						}}
-						onMouseLeave={ () => {
-							setHover([-1,-1,-1])
-						}}
-						onClick={() => {
-							if (setSelectedBoard && board[i][j].name) {
-								setSelectedBoard([i,j,player])
-								if (selectAttack[0] != -1) {
-									sendAttack([i,j,player])
-								}
+
+	return <GridBoard 
+		opponent={opponent}
+		className={className}
+		render={(i, j) => {
+			return (<motion.div 
+				className={gridCard} key={i*10+j}
+				onMouseEnter={ () => {
+					setHover([i,j, player])
+					setCardHover({
+						name: "",
+						player: player,
+						location: "board",
+						row: i,
+						col: j,
+					})
+				}}
+				onMouseLeave={ () => {
+					setHover([-1,-1,-1])
+				}}
+				onClick={() => {
+					if (setSelectedBoard && board[i][j].name) {
+						const thisb = [i,j,player]
+						if (selectedBoard.every((v, i) =>
+							v == thisb[i]
+						)) {
+							setSelectedBoard([-1,-1,-1])
+						} else {
+							setSelectedBoard([i,j,player])
+							if (selectAttack[0] != -1) {
+								sendAttack([i,j,player])
 							}
-						}}
-						key={j}/>)
-				})
-			}
-			</div>
-		})
-	}</div>
+						}
+					}
+				}}
+			/>)
+		}}
+	/>
 }
 
 
@@ -311,59 +387,42 @@ interface BoardProps {
 
 function Board(props: BoardProps) {
 	const { className, board, selectedBoard, player, opponent } = props
-	return <div className={className}>{
-		[...Array(2)].map((_u, index) => {
-			return <div className="flex" key={index}> {
-				[...Array(5)].map((_u, jindex) => {
-					let i = index
-					let j = jindex
-					if (opponent === 0) {
-						i = Math.abs(i-1)
-						j = Math.abs(j-4)
-					}
-
-					let style = (selectedBoard && 
-						selectedBoard[0] == i &&
-						selectedBoard[1] == j &&
-						selectedBoard[2] == player) ?
-						" bg-yellow-100" : ""
-
-					let card
-					if (board && board[i] && board[i][j].name) {
-						card = board[i][j]
-					}
-
-
-					return (<div 
-						className={gridCard + style}
-						key={j}
-						id={`board-${i}-${j}-${player}`}
-					>
-						{card && <div>
-							<div>{card.name}</div>
-							<div>
-								{card.hp || "0"}
-								{card.atk ? "/" + card.atk : ""}
-							</div>
-						</div>}
-					</div>)
-				})
+	return <GridBoard 
+		opponent={opponent}
+		className={className}
+		render={(i, j) => {
+			let card
+			if (board && board[i] && board[i][j].name) {
+				card = board[i][j]
 			}
+
+			let style = (selectedBoard && 
+				selectedBoard[0] == i &&
+				selectedBoard[1] == j &&
+				selectedBoard[2] == player) ?
+				" bg-yellow-100" : ""
+
+			return <div 
+				className={gridCard + style}
+				key={j}
+				id={`board-${i}-${j}-${player}`}
+			>
+				{card && <div>
+					<div>{card.name}</div>
+					<div>
+						{card.hp || "0"}
+						{card.atk ? "/" + card.atk : ""}
+					</div>
+				</div>}
 			</div>
-		})
-	}</div>
+		}}
+	/>
 }
-
-
 
 interface Player {
 	number: number
 	board: Card[][]
 	hand: string[]
-}
-
-interface Players {
-	[number: number]: Player
 }
 
 interface GameComponentProps {
@@ -373,28 +432,40 @@ interface GameComponentProps {
 	className?: string,
 }
 
+export function getAllPlayers(game: GameState): Player[] {
+	const p = [
+		{
+			number: 0,
+			hand: game.player0hand,
+			board: game.player0board
+		}, 
+		{
+			number: 1,
+			hand: game.player1hand,
+			board: game.player1board
+		},
+		{
+			number: 2,
+			hand: game.player2hand,
+			board: game.player2board
+		},
+		{
+			number: 3,
+			hand: game.player3hand,
+			board: game.player3board
+		},
+	]
+	return p.slice(0, game.numPlayers)
+}
+
 export function GameComponent(props: GameComponentProps) {
 	const { game, sendMsg, setCardHovered, className } = props
-	const [selectedHand, setSelectedHand] = useState(-1)
 	const [hoverBoard, setHoverBoard] = useState([-1,-1,-1])
 
 	const [selectedBoard, setSelectedBoard] = useState([-1,-1,-1])
 	const [selectAttack, setSelectAttack] = useState([-1,-1,-1])
 
-	function allPlayers(): Player[] {
-		return [
-			{
-				number: 0,
-				hand: game.player0hand,
-				board: game.player0board
-			}, 
-			{
-				number: 1,
-				hand: game.player1hand,
-				board: game.player1board
-			}
-		]
-	}
+	const allPlayers = () => getAllPlayers(game)
 
 	const sendAttack = async (def: number[]) => {
 		sendMsg("attack", {
@@ -412,13 +483,17 @@ export function GameComponent(props: GameComponentProps) {
 	function Boards() {
 		const players = allPlayers()
 
-		const opponentBoardStyles = [" top-20 "]
+		const opponentBoardStyles = [
+			absCenter + " top-20 ", // TOP
+			absCenterY + " left-20 ", // LEFT
+			absCenterY + " right-20 ", // RIGHT 
+		]
 		let currentOpponent = -1
 
 		return (<> { players.map((player: Player, i: number) => {
 
 			
-			let boardStyle = " bottom-20 "
+			let boardStyle = absCenter + " bottom-20 "
 			if (player.number != game.playerNumber) {
 				currentOpponent += 1
 				boardStyle = opponentBoardStyles[currentOpponent]
@@ -426,11 +501,8 @@ export function GameComponent(props: GameComponentProps) {
 
 			return (<div key={i}>
 				<BoardEvents
-					className={
-						"z-3 opacity-0 "
-						+ boardStyle
-						+ absCenter
-					}
+					className={"z-3 opacity-0 " + boardStyle}
+					selectedBoard={selectedBoard}
 					setHover={setHoverBoard}
 					setCardHover={setCardHovered}
 					player={player.number}
@@ -444,11 +516,7 @@ export function GameComponent(props: GameComponentProps) {
 					}
 				/>
 				<Board
-					className={
-						"z-0 "
-						+ boardStyle
-						+ absCenter
-					}
+					className={"z-0 " + boardStyle}
 					board={player.board}
 					selectedBoard={selectedBoard}
 					player={player.number}
@@ -462,7 +530,7 @@ export function GameComponent(props: GameComponentProps) {
 	}
 
 	function CenterMenu() {
-		return <div className="absolute top-[50%] left-1">
+		return <div className={absCenter + absCenterY}>
 			<div>You: {game.playerNumber}</div>
 			<div>Turn: {game.turn || "0"}</div>
 			<div>Mana: {game.mana}</div>
@@ -471,6 +539,7 @@ export function GameComponent(props: GameComponentProps) {
 			{game.player0board[0][0].name}
 		</div>
 	}
+
 	
 	return <div id="game-component" className={className}>
 		<div 
@@ -483,32 +552,10 @@ export function GameComponent(props: GameComponentProps) {
 				Your Deck
 				{game.player0deck}
 			</div>
-			<Hand
-				hand={myHand(game)} 
-				player={game.playerNumber}
-				className={
-					"bottom-0 z-1 " +
-					absCenter
-				}
-				onDragEnd={(i: number) => {
-					if (hoverBoard[0] != -1 && 
-						hoverBoard[1] != -1 &&
-					    hoverBoard[2] == game.playerNumber) {
-						sendMsg("play hand", {
-							"index": i,
-							"r": hoverBoard[0],
-							"c": hoverBoard[1],
-						})
-					}
-				}}
-				onClick={(i: number) => {
-					setSelectedHand(i)
-				}}
-				setCardHovered={setCardHovered}
-			/>
 			<OtherPlayers state={game}/>
 
 			<Boards/>
+			<Hands game={game} hoverBoard={hoverBoard} setCardHovered={setCardHovered} sendMsg={sendMsg}/>
 
 			<div className="absolute bottom-10 right-10">
 				<button onClick={() => {

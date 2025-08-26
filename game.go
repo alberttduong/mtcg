@@ -33,17 +33,17 @@ var Cards = map[string]Card {
 	"Blaster": {Hp: 2, Atk: 3},
 	"Builder": {Hp: 2, Atk: 3},
 	"Shoveller": {Hp: 2, Atk: 3},
-	"Sculptor": {Hp: 2, Atk: 3}, // 1 cost
-	"Shieldbearer": {Hp: 2, Atk: 3},
-	"Catapulter": {Hp: 2, Atk: 3},
-	"Cannoneer": {Hp: 2, Atk: 3},
-	"Surfer": {Hp: 2, Atk: 3},
-	"Balloon Pitcher": {Hp: 2, Atk: 3},
-	"Castle Crusher": {Hp: 2, Atk: 3}, // 2 cost
-	"Super Soaker": {Hp: 2, Atk: 3},
-	"Super Squirter": {Hp: 2, Atk: 3},
-	"Shark": {Hp: 2, Atk: 3}, // 3 cost
-	"Sand Monster": {Hp: 2, Atk: 3},
+	"Sculptor": {Cost: 1, Hp: 2, Atk: 3}, // 1 cost
+	"Shieldbearer": {Cost: 1, Hp: 2, Atk: 3},
+	"Catapulter": {Cost: 1, Hp: 2, Atk: 3},
+	"Cannoneer": {Cost: 1, Hp: 2, Atk: 3},
+	"Surfer": {Cost: 1, Hp: 2, Atk: 3},
+	"Balloon Pitcher": {Cost: 1, Hp: 2, Atk: 3},
+	"Castle Crusher": {Cost: 2, Hp: 2, Atk: 3}, // 2 cost
+	"Super Soaker": {Cost: 2, Hp: 2, Atk: 3},
+	"Super Squirter": {Cost: 2, Hp: 2, Atk: 3},
+	"Shark": {Cost: 3, Hp: 2, Atk: 3}, // 3 cost
+	"Sand Monster": {Cost: 3, Hp: 2, Atk: 3},
 	"Little Castle": {Hp: 2, Atk: 3}, // Sand
 	"Sand Wall": {Hp: 2, Atk: 3},
 	"Sculpture": {Hp: 2, Atk: 3},
@@ -101,38 +101,7 @@ type GameState struct {
 	maxMana int
 }
 
-// Flat version of Game State (no nested structs)
-type StateUpdate struct {
-	PlayerNumber *int `json:"playerNumber,omitempty"`
-	Turn *int `json:"turn,omitempty"`
-	Player0Hand *[]string `json:"player0hand,omitempty"`
-	Player1Hand *[]string `json:"player1hand,omitempty"`
-	Player0Board *Board `json:"player0board,omitempty"`
-	Player1Board *Board `json:"player1board,omitempty"`
-	Player0Deck *int `json:"player0deck,omitempty"`
-	Player1Deck *int `json:"player1deck,omitempty"`
-	NumPlayers *int `json:"numPlayers,omitempty"`
-	Mana *int `json:"mana,omitempty"`
-}
 
-// Flattens entire nested object game state for React
-func flatten(game GameState) StateUpdate {
-	p0 := game.Players[0]
-	p1 := game.Players[1]
-	p0d := len(p0.Deck)
-	p1d := len(p1.Deck)
-	return StateUpdate{
-		Player0Hand: &game.Players[0].Hand,
-		Player1Hand: &game.Players[1].Hand,
-		Player0Board: &game.Players[0].Board,
-		Player1Board: &game.Players[1].Board,
-		Player0Deck: &p0d,
-		Player1Deck: &p1d,
-		Turn: &game.Turn,
-		NumPlayers: &game.NumPlayers,
-		Mana: &game.Mana,
-	}
-}
 
 func newPlayer() Player {
 	p := Player{
@@ -185,32 +154,24 @@ func (state GameState) clearUpdates() (GameState, []GameStateUpdate) {
 }
 
 // Precondition: decks are valid
-func (state GameState) initDecks(playerDecks map[int]DeckMap) (newState GameState, err error) {
-	for p, deck := range playerDecks {
-		if p < 0 || p >= state.NumPlayers {
-			return newState, Err{"Player # out of range"}
-		}
+func (state GameState) initDecks(playerDecks []DeckMap) (newState GameState, err error) {
+	if len(playerDecks) != state.NumPlayers {
+		//return newState, Err{"Player # out of range"}
+	}
 
-		for card, amount:= range deck {
+	for p, deck := range playerDecks {
+		println(p, state.NumPlayers)
+		if p >= state.NumPlayers {
+			println("returning")
+			return state, nil
+		}
+		for card, amount := range deck {
 			for range amount {
 				state.Players[p].Deck = append(state.Players[p].Deck, card)
 			}
 		}
 	}
 	return state, nil
-}
-
-func (u StateUpdate) updateDeck(state GameState, player int) StateUpdate {
-	length := len(state.Players[player].Deck)
-	switch player {
-	case 0:
-		u.Player0Deck = &length
-	case 1:
-		u.Player1Deck = &length
-	default:
-		panic("")
-	}
-	return u
 }
 
 func (state GameState) draw(player int) (GameState, error) {
@@ -239,55 +200,6 @@ func (state GameState) drawCards() GameState {
 		}
 	}
 	return state
-}
-
-func (u StateUpdate) updateMana(state GameState) StateUpdate {
-	mana := state.Mana
-	u.Mana = &mana
-	return u
-}
-
-func (u StateUpdate) updateTurn(turn int) StateUpdate {
-	u.Turn = &turn
-	return u
-}
-
-// Precondition: player is valid
-func (u StateUpdate) updateHand(state GameState, player int) StateUpdate {
-	newHand := []string{}
-	for _, card := range state.Players[player].Hand {
-		newHand = append(newHand, card)
-	}
-
-	switch player {
-	case 0:
-		u.Player0Hand = &newHand
-	case 1:
-		u.Player1Hand = &newHand
-	default:
-		panic("No player")
-	}
-	return u
-}
-
-func (u StateUpdate) updateBoard(state GameState, player int) StateUpdate {
-	newb := Board{}
-
-	for i, row := range state.Players[player].Board {
-		for j, card := range row {
-			newb[i][j] = card
-		}
-	}
-
-	switch player {
-	case 0:
-		u.Player0Board = &newb
-	case 1:
-		u.Player1Board = &newb
-	default:
-		panic("No player")
-	}
-	return u
 }
 
 func (state GameState) startTurn() GameState {
@@ -343,15 +255,29 @@ func (state GameState) playFromHand(index int, pos Pos) (GameState, error) {
 		return state, err
 	}
 
+	cost := Cards[player.Hand[index]].Cost
+	if cost > state.Mana {
+		return state, Err{"Not enough Water"}
+	}
+
 	state.Players[state.Turn].Board[pos.Row][pos.Col] = newBoardCard(player.Hand[index])
 
 	state.Players[state.Turn].Hand = remove(player.Hand, index)
 
-	ns := SU().updateHand(state, state.Turn).updateBoard(state, state.Turn)
 	state.update(GameStateUpdate{
 		Anim: Animation{Name: "hand to board"},	
-		NewState: ns,
+		NewState: SU().
+			updateHand(state, state.Turn).
+			updateBoard(state, state.Turn),
 	})
+
+	if cost > 0 {
+		state.Mana -= cost
+		state.update(GameStateUpdate{
+			Anim: Animation{Name: "spend mana"},	
+			NewState: SU().updateMana(state),
+		})
+	}
 
 	return state, nil
 }
@@ -376,12 +302,25 @@ func (state GameState) getWinner() int {
 
 func (state GameState) attack(atkr Pos, dfr Pos, player int) (GameState, error) {
 	// todo error check
+	attackCost := 0//1
+	if state.Mana < attackCost {
+		return state, Err{"Not enough Water"}
+	}
+
 	attacker := state.Players[state.Turn].Board[atkr.Row][atkr.Col]
 	defender := &(state.Players[player].Board[dfr.Row][dfr.Col])
 
 	defender.Hp -= attacker.Atk
 	if (defender.Hp <= 0) {
 		defender.Hp = 0
+	}
+
+	if attackCost > 0 {
+		state.Mana -= attackCost
+		state.update(GameStateUpdate{
+			Animation{ Name: "spend mana" },
+			SU().updateMana(state),
+		})
 	}
 
 	state.update(GameStateUpdate{

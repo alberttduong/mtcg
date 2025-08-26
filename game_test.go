@@ -12,9 +12,9 @@ func pprint(state GameState) {
 }
 
 func TestGame(t *testing.T) {
-	playerDecks := map[int]DeckMap{
-		0: { "Gunner": 8 },
-		1: { "Blaster": 4 },
+	playerDecks := []DeckMap{
+		{ "Gunner": 3, "Blaster": 3, "Castle Crusher": 1},
+		{ "Blaster": 10 },
 	}
 
 	// INIT DECKS

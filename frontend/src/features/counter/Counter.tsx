@@ -14,6 +14,9 @@ import {
 } from "../../app/middleware"
 import { default as axios } from "axios"
 import { CenterCol } from "../../styles"
+import { Popup,
+	usePopup,
+} from "@/features/component/popup"
 
 export interface CardInfo {
 	hp?: number	
@@ -32,12 +35,11 @@ export const Counter = (): JSX.Element => {
 	const loggedIn = useSelector(selectLoggedIn)
 	const dispatch = useAppDispatch()
 	useEffect(() => {
-		dispatch(connected())
 		dispatch(login(undefined))
 	}, [])
 
-	const [msg, setMsg] = useState("")
-	const [body, setBody] = useState("{}")
+	const [newPopup, closePopup, popupText] = usePopup()
+
 	const [cards, setCards] = useState<Cards>({})
 	const [deck, setDeck] = useState<Deck>({})
 
@@ -89,6 +91,7 @@ export const Counter = (): JSX.Element => {
 
 	return (<div className={CenterCol}>
 		{"Logged in: "}{loggedIn ? "true" : "false"}
+		<Popup closePopup={closePopup} text={popupText}/>
 		<label>Cards</label>
 		<div className="overflow-scroll h-[60vh]">
 		{ Object.keys(cards).map((name: string)=> {
@@ -118,6 +121,13 @@ export const Counter = (): JSX.Element => {
 				x{deck[name]}
 			</div>
 		})}
+
+		<button className="" onClick={() => {
+			newPopup("hi")
+			localStorage.setItem('deck', JSON.stringify(deck))
+		}}>
+			Save Locally
+		</button>
 
 		<button className="" onClick={() => {
 				saveDeck()

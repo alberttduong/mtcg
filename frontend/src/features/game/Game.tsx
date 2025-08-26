@@ -13,14 +13,16 @@ import {
 import { 
 	GameComponent,
 	animation,
-	CardHovered
+	CardHovered,
+	getAllPlayers,
 } from "./GameComponent"
 import {
 	Chat,
 	Lobby
 } from "./Lobby"
 import {
-	Popup
+	Popup,
+	usePopup,
 } from "@/features/component/popup"
 import { default as axios } from "axios"
 import { Cards } from "@/features/counter/Counter"
@@ -36,12 +38,23 @@ export interface GameState {
 	turn: number
 	numPlayers?: number 
 	playerNumber: number 
+
 	player0hand: string[]
-	player1hand: string[]
 	player0board: Card[][]
-	player1board: Card[][]
 	player0deck: number
+
+	player1hand: string[]
+	player1board: Card[][]
 	player1deck: number
+
+	player2hand: string[]
+	player2board: Card[][]
+	player2deck: number
+
+	player3hand: string[]
+	player3board: Card[][]
+	player3deck: number
+
 	mana: number
 }
 
@@ -49,12 +62,23 @@ function newGameState(): GameState {
 	let board: Card[][] = []
 	return {
 		playerNumber: 0,
+
 		player0hand: [],
-		player1hand: [],
 		player0board: board,
-		player1board: board,
 		player0deck: 0,
+
+		player1hand: [],
+		player1board: board,
 		player1deck: 0,
+
+		player2hand: [],
+		player2board: board,
+		player2deck: 0,
+
+		player3hand: [],
+		player3board: board,
+		player3deck: 0,
+
 		turn: 0,
 		mana: 0,
 	}
@@ -74,14 +98,7 @@ interface GameStateUpdate {
 
 function playerToBoard(player: number, state: GameState)
 : Card[][] | undefined {
-	switch (player) {
-	case 0:
-		return state.player0board
-	case 1:
-		return state.player1board
-	default:
-		return undefined
-	}
+	return getAllPlayers(state)[player].board
 }
 
 function CardView(props: any) {
@@ -125,16 +142,12 @@ export const Game = (): JSX.Element => {
 	const [lobby, setLobby] = useState(-1)
 	const [chat, setChat] = useState<string[]>([])
 	const [lobbyList, setLobbyList] = useState("")
-	const [popupOpen, setPopupOpen] = useState(false)
-	const [popupText, setPopupText] = useState("")
+
+	const [newPopup, closePopup, popupText] = usePopup()
+
 	const [cardHovered, setCardHovered] = useState<CardHovered>()
 
 	let cards = useRef<Cards>({})
-
-	function newPopup(text: string) {
-		setPopupText(text)
-		setPopupOpen(true)
-	}
 
 	const sendMsg = (msg: string, body?: Body) => {
 		const newMsg: Msg = {Msg: msg, Body: body || {}}
@@ -152,7 +165,7 @@ function sleep(ms: number) {
 			switch (u.anim.name) {
 			case "draw":
 				if (u.anim.player) {
-					await animation.drawCard(u.anim.player)
+					//await animation.drawCard(u.anim.player)
 				}
 				break
 			case "attack":
@@ -268,10 +281,7 @@ function sleep(ms: number) {
 	}, [state, chat])
 
 	return <div>
-		<Popup 
-			isOpen={popupOpen} setIsOpen={setPopupOpen}
-			text={popupText}
-			/>
+		<Popup closePopup={closePopup} text={popupText}/>
 
 		<Lobby
 			className="z-4 fixed top-0 left-0"

@@ -139,14 +139,22 @@ func execute(client *gserver.Client, server *gserver.Server, msg gserver.Msg) er
 		}
 
 		lobby.AssignPlayers()
+		np, ok := lobby.GetState("numPlayers")
+		if !ok {
+			response.Error("server error, expected numPlayers")
+			break
+		}
+		numPlayers := np.(int)
+		log.Println(numPlayers)
 
-		// todo check if there are enough players
-		playerDecks := map[int]DeckMap{
-			0: { "Gunner": 3, "Blaster": 3 },
-			1: { "Blaster": 10 },
+		playerDecks := []DeckMap{
+			{ "Gunner": 3, "Blaster": 3, "Castle Crusher": 1},
+			{ "Blaster": 10 },
+			{ "Launcher": 10 },
+			{ "Launcher": 10 },
 		}
 
-		newGame, _ := newGameState(2).initDecks(playerDecks)
+		newGame, _ := newGameState(4).initDecks(playerDecks)
 		newGame, _ = newGame.drawCards().startTurn().clearUpdates()
 
 		broadcastStartGame(lobby, newGame)
@@ -231,7 +239,7 @@ func execute(client *gserver.Client, server *gserver.Server, msg gserver.Msg) er
 		game, err := game.attack(Pos{atkRow, atkCol}, 
 			Pos{defRow, defCol}, defPlayer)
 		if err != nil {
-			response.Error("err in getting the game")
+			response.Error(err.Error())
 			break
 		}
 
