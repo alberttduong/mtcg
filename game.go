@@ -13,11 +13,12 @@ const (
 
 
 type DeckMap map[string]int
+type DeckMap2 map[string]float64
 
 type Card struct {
 	Hp int `json:"hp,omitempty"`
 	Atk int `json:"atk,omitempty"`
-	Cost int
+	Cost int `json:"cost,omitempty"`
 }
 
 // Deck: 30, ~7x Unique Cards (4 each)
@@ -94,6 +95,7 @@ type GameStateUpdate struct {
 type GameState struct {
 	PlayerNumber int `json:"playerNumber"`
 	Players []Player	 `json:"players"`
+	// turn is 0-indexed
 	Turn int `json:"turn"`
 	NumPlayers int `json:"numPlayers"`
 	Updates []GameStateUpdate

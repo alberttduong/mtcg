@@ -1,21 +1,15 @@
 import { GameState } from "./Game"
+import { clnx } from "@/features/component/util"
 import { useState, useEffect } from "react"
-import { boardCard, handCard, gridCard,
+import { 
+	horBoardCard, deckCard,
+	boardCard, handCard, gridCard,
 	absCenter,
 	absCenterY,
 } from "./styles"
-import {
-	socketListener,
-	type Response,
-	getStatusCode,
-} from "@/app/middleware"
-import { motion, animate,
-	LayoutGroup,
-	AnimatePresence,
-	useDragControls,
-	useTransform,
-	useMotionValue,
-    DragControls,
+import { 
+	motion, 
+	animate,
 } from "motion/react"
 import type {
 	Card
@@ -169,32 +163,6 @@ function Hands(props: {
 	})}</>)
 }	
 
-function OtherPlayers(props: any) {
-	const game: GameState = props.state
-
-	if (game.playerNumber == null) return
-
-	const otherHands = [game.player0hand, game.player1hand]
-	const players = [0, 1]
-
-	otherHands.splice(game.playerNumber, 1)
-	players.splice(game.playerNumber, 1)
-
-	return <div>
-		{players.map((p, i) => {
-			return <div 
-				id={"deck-"+p} 
-				key={i}
-				className={boardCard + " absolute left-10 top-10 z-1"}>
-				Player{p} Deck
-				{game.player1deck}
-			</div>
-		})
-	}
-	</div>
-}
-
-
 export interface CardHovered {
 	name: string
 	player: number
@@ -229,8 +197,7 @@ function Hand(props: HandProps) {
 		className={className + " flex"}
 	>
 		{hand && hand.map((card, i) => {
-			return (
-			<motion.div
+			return (onDragEnd && <motion.div
 				className={handCard + cardClassName} key={i} 
 				drag layout dragElastic={0} dragSnapToOrigin
 				onDragEnd={() => {if (onDragEnd) {
@@ -262,6 +229,9 @@ function Hand(props: HandProps) {
 			>
 				{card}
 			</motion.div>
+			|| <div className={handCard + cardClassName} key={i}>
+				{card}
+			</div>
 			)
 		})}
 	</div>
@@ -286,34 +256,58 @@ function GridBoard(props: {
 	opponent?: number, 
 	className?: string,
 	render: (i: number, j: number) => any,
+	bold?: boolean,
+	renderInfo?: () => any,
 }) {
 	const { 
 		opponent, 
 		className, 
 		render,
+		bold,
+		renderInfo,
 	} = props
 
 	let columnStyle = " flex flex-col"
 	let rowStyle = " flex"
+	let deckPos = "right-[-100px]"
+	let horizontal = true
 	if (opponent === 0) {
 		columnStyle = " flex flex-col-reverse"
 		rowStyle = " flex flex-row-reverse"
+		deckPos = "left-[-100px]" 
+		horizontal = true
 	}
 	if (opponent === 1) {
 		columnStyle = " flex flex-row-reverse"
 		rowStyle = " flex flex-col"
+		deckPos = "bottom-[-60px]" 
+		horizontal = false 
 	}
 	if (opponent === 2) {
 		columnStyle = " flex flex-row"
 		rowStyle = " flex flex-col-reverse"
+		deckPos = "top-[-60px]" 
+		horizontal = false 
 	}
 	return <>
-		<div className={className + columnStyle}>
-			{[...Array(2)].map((_u, i) => {
-				return <div className={rowStyle} key={i}>
+		<div className={className + rowStyle}>
+			{renderInfo !== undefined && <div 
+				className={clnx(
+					bold ? "font-bold" : "",
+					deckCard,
+					horizontal ? absCenterY : absCenter,
+					deckPos,
+				)}
+			>
+				{renderInfo()}
+			</div>}
+			{[...Array(5)].map((_u, i) => {
+				return <div className={clnx(
+					columnStyle,
+				)} key={i}>
 					{
-						[...Array(5)].map((_u, j) => {
-							return render(i, j)
+						[...Array(2)].map((_u, j) => {
+							return render(j, i)
 						})
 					}
 				</div>
@@ -321,7 +315,6 @@ function GridBoard(props: {
 		</div>
 	</>
 }
-
 
 function BoardEvents(props: BoardEventsProps) {
 	const { 
@@ -383,13 +376,31 @@ interface BoardProps {
 	selectedBoard: number[]
 	player: number
 	opponent?: number
+	deck?: number
+	bold?: boolean,
 }
 
 function Board(props: BoardProps) {
-	const { className, board, selectedBoard, player, opponent } = props
+	const { 
+		className,
+		board,
+		selectedBoard,
+		player,
+		opponent,
+		deck,
+		bold,
+	} = props
 	return <GridBoard 
+		bold={bold}
 		opponent={opponent}
 		className={className}
+		renderInfo={() => {
+			return <>
+				Player {player}
+				<div>Deck ({deck})</div>
+			</>
+		}}
+			
 		render={(i, j) => {
 			let card
 			if (board && board[i] && board[i][j].name) {
@@ -404,7 +415,7 @@ function Board(props: BoardProps) {
 
 			return <div 
 				className={gridCard + style}
-				key={j}
+				key={i*10+j}
 				id={`board-${i}-${j}-${player}`}
 			>
 				{card && <div>
@@ -423,6 +434,7 @@ interface Player {
 	number: number
 	board: Card[][]
 	hand: string[]
+	deck: number
 }
 
 interface GameComponentProps {
@@ -437,22 +449,26 @@ export function getAllPlayers(game: GameState): Player[] {
 		{
 			number: 0,
 			hand: game.player0hand,
-			board: game.player0board
+			board: game.player0board,
+			deck: game.player0deck,
 		}, 
 		{
 			number: 1,
 			hand: game.player1hand,
-			board: game.player1board
+			board: game.player1board,
+			deck: game.player1deck,
 		},
 		{
 			number: 2,
 			hand: game.player2hand,
-			board: game.player2board
+			board: game.player2board,
+			deck: game.player2deck,
 		},
 		{
 			number: 3,
 			hand: game.player3hand,
-			board: game.player3board
+			board: game.player3board,
+			deck: game.player3deck,
 		},
 	]
 	return p.slice(0, game.numPlayers)
@@ -488,6 +504,11 @@ export function GameComponent(props: GameComponentProps) {
 			absCenterY + " left-20 ", // LEFT
 			absCenterY + " right-20 ", // RIGHT 
 		]
+		const oppDeckStyles = [
+			absCenter + " top-0 ", // TOP
+			absCenterY + " left-0 ", // LEFT
+			absCenterY + " right-0 ", // RIGHT 
+		]
 		let currentOpponent = -1
 
 		return (<> { players.map((player: Player, i: number) => {
@@ -517,9 +538,11 @@ export function GameComponent(props: GameComponentProps) {
 				/>
 				<Board
 					className={"z-0 " + boardStyle}
-					board={player.board}
 					selectedBoard={selectedBoard}
+					board={player.board}
 					player={player.number}
+					bold={game.turn == player.number}
+					deck={player.deck}
 					opponent={
 						game.playerNumber == player.number ?
 							undefined : currentOpponent
@@ -547,13 +570,6 @@ export function GameComponent(props: GameComponentProps) {
 			className="bg-blue-100 w-[80vw] h-[95vh] relative z-0">
 
 			<CenterMenu/>
-			<div id={"deck-"+game.playerNumber}
-				className={boardCard + " absolute left-10 bottom-10 z-1"}>
-				Your Deck
-				{game.player0deck}
-			</div>
-			<OtherPlayers state={game}/>
-
 			<Boards/>
 			<Hands game={game} hoverBoard={hoverBoard} setCardHovered={setCardHovered} sendMsg={sendMsg}/>
 

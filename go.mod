@@ -17,6 +17,7 @@ require (
 	github.com/profclems/go-dotenv v1.1.1 // indirect
 	github.com/rs/cors v1.11.1 // indirect
 	github.com/spf13/cast v1.9.2 // indirect
+	golang.org/x/crypto v0.42.0 // indirect
 )
 
 replace gserver => ../gserver

@@ -22,6 +22,8 @@ export type Response = {
 	}
 }
 
+export type SendMsg = (msg: string, body?: Body) => void
+
 const listenerMiddleware = createListenerMiddleware()
 let socket = new Socket()
 
@@ -33,17 +35,31 @@ listenerMiddleware.startListening({
 	effect: async () => { 
 		socket.connect('ws://localhost:8080/ws')
 
+		/*
 		socket.on('open', () => {
 			const msg = {Msg: "Hello there", Body: {}}
 			socket.send(msg)
 			console.log('Connected')
 		})
-
-		socket.on('message', (e: any) => {
-			console.log(`got ${e.data}`)
-		})
+		*/
 	}
 })
+
+export async function ConnectWS() {
+	return new Promise(resolve => {
+		socket.connect('ws://localhost:8080/ws')
+
+		socket.on('open', () => {
+			//console.log('Connected')
+			resolve(0)
+		})
+
+		socket.on('message', (e: any) => {
+			console.log(`Got ${e.data}`)
+		})
+	} )
+}
+
 
 listenerMiddleware.startListening({
 	actionCreator: send,
@@ -53,8 +69,15 @@ listenerMiddleware.startListening({
 	}
 })
 
-function socketListener(callback: any) {
-	socket.on('message', callback)
+function socketListener(callback: any, callbackName?: string) {
+	socket.on('message', callback, callbackName)
+}
+
+export function useSendMsg(dispatch: any) {
+	return (msg: string, body?: Body) => {
+		const newMsg: Msg = {Msg: msg, Body: body || {}}
+		dispatch(send(newMsg))
+	}
 }
 
 export async function getStatusCode(msg: string): Promise<number> {
@@ -69,6 +92,26 @@ export async function getStatusCode(msg: string): Promise<number> {
 
 function socketOn(event: string, callback: any) {
 	socket.on(event, callback)
+}
+
+
+export function receiveLobbyResponse(
+	res: Response,
+	setLobby: (i: number) => void
+) {
+	switch (res.Msg) {
+	case "create lobby":
+		setLobby(res.Body.lobbyId)
+		break
+	case "join lobby":
+		setLobby(res.Body.lobbyId)
+		break
+	case "leave lobby":
+		if (res.StatusCode == 200) {
+			setLobby(-1)
+		}
+		break
+	}
 }
 
 export { socketListener, socketOn }

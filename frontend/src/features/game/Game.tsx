@@ -1,7 +1,11 @@
 import type { JSX } from "react"
+import { DeckMenu } from "../counter/DeckMenu"
+import { useSelector } from "react-redux"
 import { useState, useEffect, useRef } from "react"
 import { 
+	selectLobbyId,
 	useAppDispatch, 
+	joinLobby,
 } from "../../app/store"
 import type { Body, Msg, Response } from "@/app/middleware"
 import { 
@@ -26,7 +30,8 @@ import {
 } from "@/features/component/popup"
 import { default as axios } from "axios"
 import { Cards } from "@/features/counter/Counter"
-import { CardInfo} from "@/features/counter/CardInfo"
+import { type DeckOption } from "@/features/counter/DeckMenu"
+import { CardInfo } from "@/features/counter/CardInfo"
 
 export interface Card {
 	name: string
@@ -133,19 +138,28 @@ function CardView(props: any) {
 	</div>
 }
 
+function sleep(ms: number) {
+	return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 export const Game = (): JSX.Element => {
 	const dispatch = useAppDispatch()
+	const lobby = useSelector(selectLobbyId)
+
+	const setLobby = (lob: number) => {
+		dispatch(joinLobby(lob))
+	}
+
 	const [state, setState] = useState<GameState>(newGameState())
-	const [msg, setMsg] = useState("")
-	const [body, setBody] = useState("{}")
 	const [started, setStarted] = useState(false)
-	const [lobby, setLobby] = useState(-1)
+	//const [lobby, setLobby] = useState(-1)
 	const [chat, setChat] = useState<string[]>([])
-	const [lobbyList, setLobbyList] = useState("")
 
 	const [newPopup, closePopup, popupText] = usePopup()
 
 	const [cardHovered, setCardHovered] = useState<CardHovered>()
+
+	const [deck, setDeck] = useState<DeckOption>({data: {}})
 
 	let cards = useRef<Cards>({})
 
@@ -154,9 +168,6 @@ export const Game = (): JSX.Element => {
 		dispatch(send(newMsg))
 	}
 
-function sleep(ms: number) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
 	async function updateGame(u: GameStateUpdate, 
 							  newState: GameState) {
 
@@ -164,9 +175,6 @@ function sleep(ms: number) {
 			await sleep(1)
 			switch (u.anim.name) {
 			case "draw":
-				if (u.anim.player) {
-					//await animation.drawCard(u.anim.player)
-				}
 				break
 			case "attack":
 				if (u.anim.pos1 && u.anim.pos2) {
@@ -205,11 +213,6 @@ function sleep(ms: number) {
 	useEffect(() => {
 		dispatch(connected())
 
-		socketOn('open', () => {
-			//sendMsg("create lobby")
-			//sendMsg("start game")
-		})
-
 		axios.get('http://localhost:8080/cards')
 		.then((res) => {
 			cards.current = res.data
@@ -237,15 +240,6 @@ function sleep(ms: number) {
 					]
 				)
 				break
-			case "create lobby":
-				setLobby(res.Body.lobbyId)
-				break
-			case "get lobby":
-				setLobbyList(res.Body.lobbyList)
-				break
-			case "join lobby":
-				setLobby(res.Body.lobbyId)
-				break
 			case "start game":
 				if (res.StatusCode != 0)
 					break	
@@ -258,6 +252,7 @@ function sleep(ms: number) {
 			case "leave lobby":
 				if (res.StatusCode == 200) {
 					setLobby(-1)
+					setStarted(false)
 				}
 				break
 			case "update game":
@@ -273,11 +268,8 @@ function sleep(ms: number) {
 				}
 				update()
 				break
-			default:
-				if (res.StatusCode == 0)
-					console.log(`unrecognized msg in server response: ${res.Msg}`)
 			}
-		})
+		}, 'game')
 	}, [state, chat])
 
 	return <div>
@@ -285,9 +277,12 @@ function sleep(ms: number) {
 
 		<Lobby
 			className="z-4 fixed top-0 left-0"
+			newPopup={newPopup}
 			lobby={lobby}
 			chat={chat}
 			sendMsg={sendMsg} />
+
+		{!started && <DeckMenu deck={deck} setDeck={setDeck} sendMsg={sendMsg}/>}
 
 		<CardView 
 			state={state}

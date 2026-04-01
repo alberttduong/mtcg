@@ -1,9 +1,15 @@
 class Socket {
-  socket: WebSocket | null
-  listening: any
+	socket: WebSocket | null
+	listening: any
+	onOpen: any
+	lobby?: number
+	callbacks: {
+		[eventName: string]: any
+	}
 
   constructor() {
     this.socket = null
+	this.callbacks = {}
   }
 
   connect(url: string) {
@@ -19,19 +25,24 @@ class Socket {
     }
   }
 
-  send(message: any) {
-    if (this.socket) {
-      this.socket.send(JSON.stringify(message))
-    }
-  }
+	send(message: any) {
+		if (this.socket) {
+			this.socket.send(JSON.stringify(message))
+		}
+	}
 
-  on(eventName: string, callback: any) {
-    if (this.socket) {
-	  this.socket.removeEventListener(eventName, this.listening)
-      this.socket.addEventListener(eventName, callback)
-	  this.listening = callback
-    }
-  }
+	on(eventName: string, callback: any, callbackName?: string) {
+		if (!this.socket) {
+			console.log('ERROR: listening before opening socket')
+			return
+		}
+
+		this.socket.addEventListener(eventName, callback)
+		if (callbackName) {
+			this.socket.removeEventListener(eventName, this.callbacks[callbackName])
+			this.callbacks[eventName] = callback
+		}
+	}
 }
 
 export { Socket }

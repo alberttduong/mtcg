@@ -2,10 +2,15 @@ DROP TABLE IF EXISTS users;
 
 CREATE TABLE users (
 	id INTEGER NOT NULL PRIMARY KEY,
-	name TEXT,
+	name TEXT NOT NULL UNIQUE,
+	password TEXT NOT NULL,
 	deck JSON
 );
 
 INSERT 
-	INTO users(id, name, deck) 
-	VALUES (1, 'Bill', json('{"Gunner": 3}'));
+	INTO users(id, name, password, deck) 
+	VALUES (1, 'Bill', '1234', json('{"Gunner": 3}'));
+
+INSERT 
+	INTO users(id, name, password, deck) 
+	VALUES (2, 'Sam', '1234', json('{"Gunner": 4}'));

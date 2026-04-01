@@ -8,6 +8,7 @@ import { store } from "./app/store"
 import "./index.css"
 import { CenterCol } from "@/styles"
 import { BrowserRouter, Routes, Route } from "react-router"
+import { App } from "./app-wrapper"
 
 const root = document.getElementById("root")
 
@@ -15,13 +16,13 @@ if (root) {
 	ReactDOM.createRoot(root).render(
 		<BrowserRouter><StrictMode>
 		<Provider store={store}>
-			<div className={CenterCol}>
-			<Routes>
-				<Route path="/deck" element={<Counter />} />
-				<Route path="/" element={<Game />} />
-				<Route path="/home" element={<Home/>} />
-			</Routes>
-			</div>
+			<App className={CenterCol}>
+				<Routes>
+					<Route path="/deck" element={<Counter/>} />
+					<Route path="/" element={<Home/>} />
+					<Route path="/game" element={<Game/>} />
+				</Routes>
+			</App>
 		</Provider>
 		</StrictMode></BrowserRouter>
 	)

@@ -7,7 +7,14 @@ interface PopupProps {
 	title?: string,
 }
 
-export function usePopup(): [(text: string)=>void, ()=>void, string] {
+
+export function usePopup(): 
+	[
+		newPopup: (text: string)=>void,
+		closePopup: ()=>void, 
+		popupText: string
+	] 
+{
 	const [popupText, setText] = useState("")
 	const newPopup = (text: string) => setText(text)
 	const closePopup = () => setText("")
