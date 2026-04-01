@@ -1,9 +1,9 @@
 import { GameState } from "./Game"
 import { clnx } from "@/features/component/util"
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { 
-	horBoardCard, deckCard,
-	boardCard, handCard, gridCard,
+	deckCard,
+	handCard, gridCard,
 	absCenter,
 	absCenterY,
 } from "./styles"
@@ -504,11 +504,7 @@ export function GameComponent(props: GameComponentProps) {
 			absCenterY + " left-20 ", // LEFT
 			absCenterY + " right-20 ", // RIGHT 
 		]
-		const oppDeckStyles = [
-			absCenter + " top-0 ", // TOP
-			absCenterY + " left-0 ", // LEFT
-			absCenterY + " right-0 ", // RIGHT 
-		]
+
 		let currentOpponent = -1
 
 		return (<> { players.map((player: Player, i: number) => {

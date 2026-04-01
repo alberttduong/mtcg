@@ -6,7 +6,7 @@ import DeckList from "./DeckList"
 import { Deck } from "./Counter"
 import axios from "axios"
 import { type Dispatch, type SetStateAction } from "react"
-import type { Body, Msg, Response, SendMsg } from "@/app/middleware"
+import type { SendMsg } from "@/app/middleware"
 
 export type DeckOption = {
 	name?: string

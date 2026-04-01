@@ -11,7 +11,6 @@ import type { Body, Msg, Response } from "@/app/middleware"
 import { 
 	connected,
 	socketListener,
-	socketOn,
 	send,
 } from "../../app/middleware"
 import { 
@@ -21,7 +20,6 @@ import {
 	getAllPlayers,
 } from "./GameComponent"
 import {
-	Chat,
 	Lobby
 } from "./Lobby"
 import {

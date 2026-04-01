@@ -1,15 +1,10 @@
-import { useNavigate } from "react-router"
-import { useLocation } from "react-router-dom"
 import type { JSX } from "react"
 import { Popup, usePopup } from "@/features/component/popup"
 import { Link } from "react-router"
-import { useState, useEffect, useRef } from "react"
+import { useState } from "react"
 import { 
 	AvailableLobbies,
 	LobbyDisplay,
-	type Lobby,
-	type Lobbies,
-	type Member,
 } from "@/features/game/LobbyMenu"
 import { default as axios } from "axios"
 
@@ -19,25 +14,18 @@ import {
 	selectChat,
 	selectUsername,
 	useAppDispatch, 
-	loginWithToken,
 	selectLobbies,
 	selectLobbyId,
 	logout,
 	loginAsUser,
-	joinLobby,
 } from "../../app/store"
 import { 
 	send,
-	connected,
-	socketListener,
-	socketOn,
-	type Response,
-    receiveLobbyResponse,
 } from "../../app/middleware"
 import { useSelector } from "react-redux"
 
 import { Field, Fieldset, 
-	Input, Label, Legend, Select, Textarea,
+	Input, Label, Legend,
 	Button
 } from '@headlessui/react'
 
@@ -106,13 +94,12 @@ function SignupForm(props: {signup: (c: Credentials) => void}) {
 }
 
 export const Home = (): JSX.Element => {
-	const navigate = useNavigate()
 	const dispatch = useAppDispatch()
 	const loggedIn = useSelector(selectLoggedIn)
 	const lobbyId = useSelector(selectLobbyId)
 	const username = useSelector(selectUsername)
 	const lobbies = useSelector(selectLobbies)
-	const [nickname, setNickname] = useState('')
+	const [nickname, _] = useState('')
 	const [newPopup, closePopup, popupText] = usePopup()
 
 	const sendMsg = (msg: string, body?: any) => {
@@ -160,19 +147,8 @@ export const Home = (): JSX.Element => {
 		sendMsg("create lobby", {nickname: nickname})
 	}
 
-	function leaveLobby() {
-		sendMsg("leave lobby", {lobbyId: 1})
-	}
-
-	function joinLobby() {
-		sendMsg("join lobby", {lobbyId: 1, nickname: nickname})
-	}
-
 	const chat = useSelector(selectChat)
 
-	function startGame() {
-		sendMsg("start game")
-	}
 
 	return <div className="flex flex-col items-center">
 		<Popup 

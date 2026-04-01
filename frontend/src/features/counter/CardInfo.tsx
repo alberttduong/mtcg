@@ -1,9 +1,4 @@
 import {
-	type Card,
-} from "@/features/game/Game"
-
-import {
-	type Cards,
 	type CardInfo
 } from "@/features/counter/Counter"
 

@@ -2,16 +2,10 @@ import type { JSX } from "react"
 import { useState, useEffect } from "react"
 import { useSelector } from "react-redux"
 import { 
-	useAppDispatch, 
-	logout,	
 	selectLoggedIn,
 } from "../../app/store"
-import { 
-	connected,
-	send,
-} from "../../app/middleware"
 import { default as axios } from "axios"
-import { CenterCol, CenterRow } from "../../styles"
+import { CenterRow } from "../../styles"
 import { Popup,
 	usePopup,
 } from "@/features/component/popup"

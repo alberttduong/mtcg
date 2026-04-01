@@ -1,33 +1,30 @@
 //import { CenterCol } from "@/styles"
 import { useEffect } from "react"
 import { 
-	connected,
 	ConnectWS,
-	send,
 	type Response,
 	useSendMsg,
 	socketListener,
 } from "@/app/middleware"
-import { useSelector } from "react-redux"
 import { 
 	useAppDispatch,
 	loginWithToken,
 	loginAsUser,
 	joinLobby,
-	selectLobbies,
 	setLobbies,
 	addToChat,
 	confirmSelectedDeck,
 	setDeck,
 	updateLobby,
 } from "@/app/store"
-import { useLocation, useNavigate } from "react-router-dom"
+import { 
+	useNavigate 
+} from "react-router-dom"
 
 export function App(props: {className?: string, children: any}) {
 	const {className, children} = props
 	const dispatch = useAppDispatch()
 	const sendMsg = useSendMsg(dispatch)
-	const location = useLocation()
 	const navigate = useNavigate()
 	const setLobby = (lob: number) => {
 		dispatch(joinLobby(lob))

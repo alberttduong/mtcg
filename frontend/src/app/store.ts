@@ -1,7 +1,7 @@
 import * as toolkitRaw from '@reduxjs/toolkit';
-const { createAction, createSlice } = ((toolkitRaw as any).default ?? toolkitRaw) as typeof toolkitRaw;
+const { createSlice } = ((toolkitRaw as any).default ?? toolkitRaw) as typeof toolkitRaw;
 
-import { configureStore, createReducer } from '@reduxjs/toolkit'
+import { configureStore } from '@reduxjs/toolkit'
 import { useDispatch } from 'react-redux'
 import { listenerMiddleware } from "./middleware"
 
