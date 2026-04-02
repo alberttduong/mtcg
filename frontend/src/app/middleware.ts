@@ -24,6 +24,9 @@ export type Response = {
 
 export type SendMsg = (msg: string, body?: Body) => void
 
+const api_url = '54.242.117.182'
+export const API_URL = `http://${api_url}`
+
 const listenerMiddleware = createListenerMiddleware()
 let socket = new Socket()
 
@@ -33,7 +36,7 @@ const send = createAction<Msg>('send')
 listenerMiddleware.startListening({
 	actionCreator: connected,
 	effect: async () => { 
-		socket.connect('ws://localhost:8080/ws')
+		socket.connect(`ws://${api_url}/ws`)
 
 		/*
 		socket.on('open', () => {
@@ -47,7 +50,7 @@ listenerMiddleware.startListening({
 
 export async function ConnectWS() {
 	return new Promise(resolve => {
-		socket.connect('ws://localhost:8080/ws')
+		socket.connect(`ws://${api_url}/ws`)
 
 		socket.on('open', () => {
 			//console.log('Connected')

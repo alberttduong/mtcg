@@ -6,7 +6,10 @@ import DeckList from "./DeckList"
 import { Deck } from "./Counter"
 import axios from "axios"
 import { type Dispatch, type SetStateAction } from "react"
-import type { SendMsg } from "@/app/middleware"
+import { 
+	type SendMsg,
+	API_URL
+} from "@/app/middleware"
 
 export type DeckOption = {
 	name?: string
@@ -40,7 +43,7 @@ export function DeckMenu(props: {
 	const confirmedDeck = useSelector(selectConfirmedDeck)
 
 	useEffect(() => {
-		axios.get('http://localhost:8080/deck', {
+		axios.get(`${API_URL}/deck`, {
 			headers: {
 				'Authorization': localStorage.getItem('token')
 			},

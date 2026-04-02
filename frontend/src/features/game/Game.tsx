@@ -12,7 +12,8 @@ import {
 	connected,
 	socketListener,
 	send,
-} from "../../app/middleware"
+	API_URL
+} from "@/app/middleware"
 import { 
 	GameComponent,
 	animation,
@@ -211,7 +212,7 @@ export const Game = (): JSX.Element => {
 	useEffect(() => {
 		dispatch(connected())
 
-		axios.get('http://localhost:8080/cards')
+		axios.get(`${API_URL}/cards`)
 		.then((res) => {
 			cards.current = res.data
 		})

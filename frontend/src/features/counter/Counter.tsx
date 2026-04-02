@@ -1,6 +1,11 @@
 import type { JSX } from "react"
 import { useState, useEffect } from "react"
 import { useSelector } from "react-redux"
+
+import {
+	API_URL
+} from "../../app/middleware"
+
 import { 
 	selectLoggedIn,
 } from "../../app/store"
@@ -87,7 +92,7 @@ export const Counter = (): JSX.Element => {
 	const [saved, setSaved] = useState(true)
 
 	async function getDeck() {
-		axios.get('http://localhost:8080/deck', {
+		axios.get(`${API_URL}/deck`, {
 			headers: {
 				 Authorization: localStorage.getItem('token'),
 			}
@@ -104,7 +109,7 @@ export const Counter = (): JSX.Element => {
 	}
 
 	async function testCxn() {
-		axios.get('http://localhost:8080/testcxn')
+		axios.get(`${API_URL}/testcxn`)
 		.then((res) => {
 			if (res.status == 200) {
 				newPopup("200")
@@ -115,7 +120,7 @@ export const Counter = (): JSX.Element => {
 	}
 
 	async function saveDeck() {
-		axios.put('http://localhost:8080/deck', deck, {
+		axios.put(`${API_URL}/deck`, deck, {
 			headers: {
 				 Authorization: localStorage.getItem('token'),
 			}
@@ -131,7 +136,7 @@ export const Counter = (): JSX.Element => {
 	}
 
 	useEffect(() => {
-		axios.get('http://localhost:8080/cards')
+		axios.get(`${API_URL}/cards`)
 		.then((res) => {
 			setCards(res.data)
 		})

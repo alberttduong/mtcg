@@ -21,6 +21,7 @@ import {
 } from "../../app/store"
 import { 
 	send,
+	API_URL,
 } from "../../app/middleware"
 import { useSelector } from "react-redux"
 
@@ -108,7 +109,7 @@ export const Home = (): JSX.Element => {
 
 	function handleLogin(creds: Credentials) {
 		if (creds) {
-			axios.put('http://localhost:8080/login', creds)
+			axios.put(`${API_URL}/login`, creds)
 			.then((res) => {
 				newPopup(`Successfully logged in as ${creds.name}`)
 				dispatch(loginAsUser(creds.name))
@@ -119,7 +120,7 @@ export const Home = (): JSX.Element => {
 
 	function handleSignup(creds: Credentials) {
 		if (creds) {
-			axios.put('http://localhost:8080/signup', creds)
+			axios.put(`${API_URL}/signup`, creds)
 			.then((res) => {
 				newPopup(`Successfully created account and logged in as ${creds.name}`)
 				dispatch(loginAsUser(creds.name))
