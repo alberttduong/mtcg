@@ -25,7 +25,7 @@ export type Response = {
 export type SendMsg = (msg: string, body?: Body) => void
 
 const api_url = '54.242.117.182'
-export const API_URL = `http://${api_url}`
+export const API_URL = `https://${api_url}`
 
 const listenerMiddleware = createListenerMiddleware()
 let socket = new Socket()
