@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"log"
+	"os"
 	"golang.org/x/crypto/bcrypt"
 	
 	"github.com/gorilla/websocket"
@@ -12,7 +13,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/profclems/go-dotenv"
 
-	"gserver"
+	"github.com/alberttduong/gameserver"
 	"io"
 	"encoding/json"
 
@@ -20,14 +21,20 @@ import (
 	_ "github.com/mattn/go-sqlite3"	
 )
 
-var key []byte
+var ENV struct {
+	jwt_key string
+}
 
 func init() {
 	err := dotenv.Load()
 	if err != nil {
-		log.Fatalf("Error loading .env file: %v", err)
+		log.Println("Error loading .env file: %v", err)
+		log.Println("Loading env vars")
+		ENV.jwt_key = os.Getenv("JWT_KEY")
+		return
 	}
-	key = []byte(dotenv.GetString("JWT_KEY"))
+
+	ENV.jwt_key = dotenv.GetString("JWT_KEY")
 }
 
 func serveHome(w http.ResponseWriter, r *http.Request) {
@@ -47,14 +54,14 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true },
 }
 
-func statePerPlayer(player int, master StateUpdate, lobby *gserver.Lobby) StateUpdate {
+func statePerPlayer(player int, master StateUpdate, lobby *gameserver.Lobby) StateUpdate {
 	// todo remove player 0
 	master.PlayerNumber = &player
 
 	return master 
 }
 
-func verifyTurn(response *gserver.Msg, game GameState, client *gserver.Client) (bool) {
+func verifyTurn(response *gameserver.Msg, game GameState, client *gameserver.Client) (bool) {
 	if client.Lobby == nil {
 		log.Printf("Error: Expected client to be in a lobby")
 		response.Error("Server error verifying turns")
@@ -82,8 +89,8 @@ func verifyTurn(response *gserver.Msg, game GameState, client *gserver.Client) (
 	return false
 }
 
-func broadcastStartGame(lobby *gserver.Lobby, master GameState) {
-	msg := gserver.Msg{
+func broadcastStartGame(lobby *gameserver.Lobby, master GameState) {
+	msg := gameserver.Msg{
 		StatusCode: 0,
 		Msg: "start game",
 		Body: make(map[string]interface{}),
@@ -104,19 +111,19 @@ func broadcastStartGame(lobby *gserver.Lobby, master GameState) {
 		if !ok {
 			panic("player not found")
 		}
-		client, ok := c.(*gserver.Client)
+		client, ok := c.(*gameserver.Client)
 		if !ok {
 			panic("client wrong type")
 		}
 		state := flatten(master)
 		state.PlayerNumber = &i
 		msg.Body["state"] = state
-		gserver.SendToClient(msg, client)
+		gameserver.SendToClient(msg, client)
 	}
 }
 
-func broadcastStatesToClients(lobby *gserver.Lobby, master StateUpdate) {
-	update := gserver.Msg{
+func broadcastStatesToClients(lobby *gameserver.Lobby, master StateUpdate) {
+	update := gameserver.Msg{
 		StatusCode: 0,
 		Msg: "update game",
 		Body: make(map[string]interface{}),
@@ -137,35 +144,35 @@ func broadcastStatesToClients(lobby *gserver.Lobby, master StateUpdate) {
 		if !ok {
 			panic("player not found")
 		}
-		client, ok := c.(*gserver.Client)
+		client, ok := c.(*gameserver.Client)
 		if !ok {
 			panic("client wrong type")
 		}
 		update.Body["updates"] = statePerPlayer(i, master, lobby)
-		gserver.SendToClient(update, client)
+		gameserver.SendToClient(update, client)
 	}
 }
 
-func broadcastUpdates(lobby *gserver.Lobby, updates []GameStateUpdate) {
+func broadcastUpdates(lobby *gameserver.Lobby, updates []GameStateUpdate) {
 	body := map[string]interface{}{"updates": updates}
-	lobby.Broadcast(gserver.Msg{
+	lobby.Broadcast(gameserver.Msg{
 		Msg: "update game",
 		StatusCode: 0,
 		Body: body,
 	})
 }
 
-func execute(client *gserver.Client, server *gserver.Server, msg gserver.Msg) error {
-	if gserver.ReceiveLobbyCommands(client, server, msg) {
+func execute(client *gameserver.Client, server *gameserver.Server, msg gameserver.Msg) error {
+	if gameserver.ReceiveLobbyCommands(client, server, msg) {
 		return nil
 	}
-	if gserver.ReceiveChatCommands(client, server, msg) {
+	if gameserver.ReceiveChatCommands(client, server, msg) {
 		return nil
 	}
 
 	lobby := client.Lobby
 
-	response := gserver.MakeResponse(msg)
+	response := gameserver.MakeResponse(msg)
 
 SwitchCommand:
 	switch msg.Msg {
@@ -209,7 +216,7 @@ SwitchCommand:
 		}
 
 		lobby.UpdatePrivateState(client, "deck", deckMap)
-		lobby.Broadcast(gserver.Msg{
+		lobby.Broadcast(gameserver.Msg{
 			StatusCode: 0,
 			Msg: "set deck",
 			Body: map[string]interface{}{
@@ -251,7 +258,7 @@ SwitchCommand:
 				response.Error("Not all players ready")
 				break SwitchCommand
 			}
-			c, ok := p.(*gserver.Client)
+			c, ok := p.(*gameserver.Client)
 			if !ok {
 				response.Error("Server error: couldnt get client from state")
 				break SwitchCommand
@@ -300,9 +307,9 @@ SwitchCommand:
 		client.Lobby.Broadcast(startBroadcast)
 	case "play hand":
 		var index, r, c int
-		err := gserver.CheckNumber(msg, "index", &index)
-		err = gserver.CheckNumber(msg, "r", &r)
-		err = gserver.CheckNumber(msg, "c", &c)
+		err := gameserver.CheckNumber(msg, "index", &index)
+		err = gameserver.CheckNumber(msg, "r", &r)
+		err = gameserver.CheckNumber(msg, "c", &c)
 		if err != nil {
 			response.Error(err.Error())
 			break
@@ -349,7 +356,7 @@ SwitchCommand:
 		}
 
 		for _, p := range params {
-			err := gserver.CheckNumber(msg, p.key, p.dest)
+			err := gameserver.CheckNumber(msg, p.key, p.dest)
 			if err != nil {
 				response.Error(err.Error())
 				break SwitchCommand
@@ -388,7 +395,7 @@ SwitchCommand:
 	default:
 		return nil
 	}
-	gserver.SendToClient(response, client)
+	gameserver.SendToClient(response, client)
 	return nil
 }
 
@@ -416,7 +423,7 @@ type Credentials struct {
 func verifyToken(token string) (user string, err error) {
 	parsedT, err := jwt.Parse(token, 
 		func(token *jwt.Token) (any, error) {
-			return []byte(dotenv.GetString("JWT_KEY")), nil
+			return []byte(ENV.jwt_key), nil
 		}, 
 		jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}))
 
@@ -433,7 +440,7 @@ func verifyToken(token string) (user string, err error) {
 func createToken(user string) (token []byte, err error) {
 	t := jwt.NewWithClaims(jwt.SigningMethodHS256, 
 		jwt.MapClaims{"sub": user})
-	s, err := t.SignedString(key)
+	s, err := t.SignedString([]byte(ENV.jwt_key))
 	return []byte(s), err
 }
 
@@ -552,7 +559,7 @@ func handlePutDeck(db *sql.DB, w http.ResponseWriter, r *http.Request, username 
 }
 
 func main() {
-	server := gserver.InitServer()
+	server := gameserver.InitServer()
 
 	db, err := sql.Open("sqlite3", "./users.db")
 	if err != nil {
@@ -622,11 +629,14 @@ func main() {
 			log.Println(err)
 			return
 		}
-		go gserver.HandleWSClient(conn, server, execute)
+		go gameserver.HandleWSClient(conn, server, execute)
 	})
 
 	c := cors.New(cors.Options{
-        AllowedOrigins: []string{"http://localhost:5173"},
+        AllowedOrigins: []string{
+			"http://localhost:5173",
+			"https://mtcg.albertduong.com",
+		},
         AllowCredentials: true,
 		AllowedHeaders: []string{"*"},
 		AllowedMethods: []string{"GET", "PUT"},
