@@ -24,7 +24,9 @@ export type Response = {
 
 export type SendMsg = (msg: string, body?: Body) => void
 
-const api_url = 'mtcg-api.albertduong.com'
+const DEV = process.env.NODE_ENV
+const api_url = DEV ? 'localhost:8080' : 'mtcg-api.albertduong.com'
+const ws_url = `ws${DEV ? '' : 's'}://${api_url}/ws`
 export const API_URL = `https://${api_url}`
 
 const listenerMiddleware = createListenerMiddleware()
@@ -36,21 +38,13 @@ const send = createAction<Msg>('send')
 listenerMiddleware.startListening({
 	actionCreator: connected,
 	effect: async () => { 
-		socket.connect(`ws://${api_url}/ws`)
-
-		/*
-		socket.on('open', () => {
-			const msg = {Msg: "Hello there", Body: {}}
-			socket.send(msg)
-			console.log('Connected')
-		})
-		*/
+		socket.connect(ws_url)
 	}
 })
 
 export async function ConnectWS() {
 	return new Promise(resolve => {
-		socket.connect(`ws://${api_url}/ws`)
+		socket.connect(ws_url)
 
 		socket.on('open', () => {
 			//console.log('Connected')
