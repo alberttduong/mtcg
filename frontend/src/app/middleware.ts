@@ -24,7 +24,7 @@ export type Response = {
 
 export type SendMsg = (msg: string, body?: Body) => void
 
-const api_url = 'mtcg-api.albertduong.com:8080'
+const api_url = 'mtcg-api.albertduong.com'
 export const API_URL = `https://${api_url}`
 
 const listenerMiddleware = createListenerMiddleware()

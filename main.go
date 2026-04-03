@@ -635,6 +635,7 @@ func main() {
 	c := cors.New(cors.Options{
         AllowedOrigins: []string{
 			"http://localhost:5173",
+			"http://mtcg.albertduong.com",
 			"https://mtcg.albertduong.com",
 		},
         AllowCredentials: true,
