@@ -1,13 +1,14 @@
 import { StrictMode } from "react"
 import ReactDOM from "react-dom/client"
 import { Provider } from "react-redux"
-import { Counter } from "@/features/counter/Counter"
+import { DeckEditor } from "@/features/deck/DeckEditor"
 import { Game } from "@/features/game/Game"
 import { Home } from "@/features/home/Home"
 import { store } from "./app/store"
 import "./index.css"
 import { CenterCol } from "@/styles"
 import { BrowserRouter, Routes, Route } from "react-router"
+import Rules from "./features/home/Rules"
 import { App } from "./app-wrapper"
 
 const root = document.getElementById("root")
@@ -18,9 +19,10 @@ if (root) {
 		<Provider store={store}>
 			<App className={CenterCol}>
 				<Routes>
-					<Route path="/deck" element={<Counter/>} />
+					<Route path="/deck" element={<DeckEditor/>} />
 					<Route path="/" element={<Home/>} />
 					<Route path="/game" element={<Game/>} />
+					<Route path="/rules" element={<Rules/>} />
 				</Routes>
 			</App>
 		</Provider>

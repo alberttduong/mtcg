@@ -1,16 +1,19 @@
 import { Description, Dialog, DialogPanel, DialogTitle } from '@headlessui/react'
 import { useState } from "react"
 
+export type NewPopupFunc = (text: string)=>void
+
 interface PopupProps {
 	closePopup: () => void,
+	closeText?: string,
 	text: string,
 	title?: string,
+	vertical?: boolean,
 }
-
 
 export function usePopup(): 
 	[
-		newPopup: (text: string)=>void,
+		newPopup: NewPopupFunc,
 		closePopup: ()=>void, 
 		popupText: string
 	] 
@@ -22,7 +25,34 @@ export function usePopup():
 }
 
 export function Popup(props: PopupProps) {
-	const {closePopup, text, title} = props
+	const {closePopup, text, title, closeText, vertical} = props
+
+  return <AbstractPopup
+			vertical={vertical}
+			closePopup={closePopup}
+			text={text}
+			title={title}
+			closeText={closeText||"Close"}/>
+}
+
+interface AbstractPopupProps {
+	closePopup: () => void,
+	text: string,
+	title?: string,
+	OkElement?: React.ReactNode,
+	closeText: string,
+	vertical?: boolean,
+}
+
+function AbstractPopup(props: AbstractPopupProps) {
+	const {
+		closePopup, 
+		text,
+		title,
+		OkElement,
+		closeText,
+		vertical,
+	} = props
 
   return (
     <>
@@ -32,8 +62,9 @@ export function Popup(props: PopupProps) {
 		<DialogTitle>{title}
 		</DialogTitle>
             <Description>{text}</Description>
-            <div className="flex gap-4">
-              <button onClick={closePopup}>Close</button>
+            <div className={`flex gap-4 ${vertical?"flex-col":""}`}>
+				{OkElement}
+            	<button onClick={closePopup}>{closeText}</button>
             </div>
           </DialogPanel>
         </div>
@@ -41,3 +72,26 @@ export function Popup(props: PopupProps) {
     </>
   )
 }
+
+export function ConfirmPopup(props: PopupProps & {
+	OkElement: React.ReactNode
+}) {
+	const {
+		closePopup, 
+		closeText,
+		text,
+		title,
+		OkElement,
+		vertical,
+	} = props
+
+	return <AbstractPopup
+		vertical={vertical}
+		closePopup={closePopup}
+		text={text}
+		title={title}
+		OkElement={OkElement}
+		closeText={closeText || "Cancel"}
+	/>
+}
+

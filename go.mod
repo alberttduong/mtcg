@@ -2,6 +2,8 @@ module github.com/alberttduong/mtcg
 
 go 1.26.1
 
+replace github.com/alberttduong/gameserver => ../gameserver
+
 require (
 	github.com/alberttduong/gameserver v0.0.0-20260401213924-54b7affbca39
 	github.com/golang-jwt/jwt/v5 v5.3.1

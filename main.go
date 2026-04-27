@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"log"
+	"strings"
 	"os"
 	"golang.org/x/crypto/bcrypt"
 	
@@ -25,10 +26,16 @@ var ENV struct {
 	jwt_key string
 }
 
+func getDeckString(db *sql.DB, username string) (deck string, err error) {
+	err = db.QueryRow(`SELECT (deck) FROM users WHERE name=?`, username).Scan(&deck)
+	log.Printf("deck: %s", deck)
+	return
+}
+
 func init() {
 	err := dotenv.Load()
 	if err != nil {
-		log.Println("Error loading .env file: %v", err)
+		log.Printf("Error loading .env file: %s", err.Error())
 		log.Println("Loading env vars")
 		ENV.jwt_key = os.Getenv("JWT_KEY")
 		return
@@ -64,28 +71,28 @@ func statePerPlayer(player int, master StateUpdate, lobby *gameserver.Lobby) Sta
 func verifyTurn(response *gameserver.Msg, game GameState, client *gameserver.Client) (bool) {
 	if client.Lobby == nil {
 		log.Printf("Error: Expected client to be in a lobby")
-		response.Error("Server error verifying turns")
+		response.ErrS("Server error verifying turns")
 		return false 
 	}
 
 	p, ok := client.Lobby.GetPrivateState(client, "player")
 	if !ok {
 		log.Printf("Error: Lobby private state does not have player number")
-		response.Error("Server error verifying turns")
+		response.ErrS("Server error verifying turns")
 		return false
 	}
 
 	playerNumber, ok := p.(int)
 	if !ok {
 		log.Printf("Error: Couldn't convert lobbystate to int player number")
-		response.Error("Server error verifying turns")
+		response.ErrS("Server error verifying turns")
 		return false
 	}
 
 	if game.Turn == playerNumber {
 		return true
 	}
-	response.Error("It is not your turn")
+	response.ErrS("It is not your turn")
 	return false
 }
 
@@ -118,6 +125,13 @@ func broadcastStartGame(lobby *gameserver.Lobby, master GameState) {
 		state := flatten(master)
 		state.PlayerNumber = &i
 		msg.Body["state"] = state
+		names, err := lobby.GetPlayerNames()
+		if err != nil {
+			log.Print(err)
+			panic("couldnt get names of players")
+		}
+		msg.Body["names"] = names
+
 		gameserver.SendToClient(msg, client)
 	}
 }
@@ -162,255 +176,102 @@ func broadcastUpdates(lobby *gameserver.Lobby, updates []GameStateUpdate) {
 	})
 }
 
-func execute(client *gameserver.Client, server *gameserver.Server, msg gameserver.Msg) error {
+func execute(
+	client *gameserver.Client, 
+	server *gameserver.Server, 
+	msg gameserver.Msg,
+	wsctx gameserver.WSCtx,
+) error {
 	if gameserver.ReceiveLobbyCommands(client, server, msg) {
+		if msg.Msg == "join lobby" && client.Lobby != nil {
+			body := map[string]any{}
+			for _, c := range client.Lobby.GetMembers() {
+				if c == nil {
+					return Err{"Expected client from getplayer"}
+				}
+				_, ok := client.Lobby.GetPrivateState(c, "deck")
+				if ok {
+					body[c.Name] = true
+				}
+			}
+			
+			client.Lobby.Broadcast(gameserver.Msg{
+				Msg: "players ready", 
+				Body: body,
+			})
+
+			fmt.Printf("%v", body)
+		}
 		return nil
 	}
 	if gameserver.ReceiveChatCommands(client, server, msg) {
 		return nil
 	}
 
-	lobby := client.Lobby
+	e := Executor{client: client, db: wsctx.Db}
+	response := e.executeCommand(msg)
 
-	response := gameserver.MakeResponse(msg)
-
-SwitchCommand:
-	switch msg.Msg {
-	case "set deck":
-		if lobby == nil {
-			response.Error("Need to be in lobby to select your deck")
-			break
-		}
-
-		d, ok := msg.Body["deck"]
-		if !ok {
-			response.Error("Expected deck in body")
-			break
-		}
-
-		deckName, ok := msg.Body["deckName"]
-		if !ok {
-			log.Printf("Expected deck name in body. Continuing")
-		}
-
-		deck, ok := d.(map[string]any)
-		if !ok {
-			response.Error("Couldn't parse deck in body")
-			break
-		}
-		deckMap := map[string]int{}
-		for k, v := range deck {
-			f, ok := v.(float64)
-			if !ok {
-				response.Error("Couldn't parse deck in body")
-				break SwitchCommand
-			}
-
-			deckMap[k] = int(f)
-		}
-
-		err := validateDeck(deckMap)
-		if err != nil {
-			response.Error(fmt.Sprintf("Deck error: %s", err.Error()))
-			break
-		}
-
-		lobby.UpdatePrivateState(client, "deck", deckMap)
-		lobby.Broadcast(gameserver.Msg{
-			StatusCode: 0,
-			Msg: "set deck",
-			Body: map[string]interface{}{
-				"name": client.Name,
-				"ready": true,
-			},
-		})
-		response.Body["deckName"] = deckName
-	case "start game":
-		if lobby == nil {
-			response.Error("Need to be in lobby to start game")
-			break
-		}
-
-		if !lobby.IsLeader(client) {
-			response.Error("Must be leader to start game")
-			break
-		}
-		started, ok := client.Lobby.GetState("started")
-
-		if ok && started.(bool) {
-			response.Error("Game already started")
-			break
-		}
-
-		lobby.AssignPlayers()
-		np, ok := lobby.GetState("numPlayers")
-		if !ok {
-			response.Error("server error, expected numPlayers")
-			break
-		}
-		numPlayers := np.(int)
-
-		playerDecks := []DeckMap{}
-
-		for i := range numPlayers {
-			p, ok := lobby.State[fmt.Sprintf("player%d", i+1)]
-			if !ok {
-				response.Error("Not all players ready")
-				break SwitchCommand
-			}
-			c, ok := p.(*gameserver.Client)
-			if !ok {
-				response.Error("Server error: couldnt get client from state")
-				break SwitchCommand
-			}
-			d, ok := lobby.GetPrivateState(c, "deck")
-			if !ok {
-				response.Error("Everyone must select their decks to start the game")
-				break SwitchCommand
-			}
-			deck, ok := d.(map[string]int)
-			if !ok {
-				response.Error("Server error: couldnt convert deck from state")
-				break SwitchCommand
-			}
-			playerDecks = append(playerDecks, deck)
-		}
-
-		newGame, _ := newGameState(numPlayers).initDecks(playerDecks)
-		newGame, _ = newGame.drawCards().startTurn().clearUpdates()
-
-		broadcastStartGame(lobby, newGame)
-		
-		client.Lobby.UpdateState("game", newGame)
-		client.Lobby.UpdateState("started", true)
-	case "end turn":
-		s, _ := client.Lobby.GetState("game")
-		game, _ := s.(GameState)
-
-		ok := verifyTurn(&response, game, client)
-		if !ok {
-			break
-		}
-
-		game, _ = game.endTurn() //1
-		game = game.startTurn() //1
-		game, updates := game.clearUpdates()
-
-
-		client.Lobby.UpdateState("game", game)
-
-		startBroadcast := msg
-		startBroadcast.Msg = "update game"
-		startBroadcast.StatusCode = 0
-		startBroadcast.Body["updates"] = updates 
-		
-		client.Lobby.Broadcast(startBroadcast)
-	case "play hand":
-		var index, r, c int
-		err := gameserver.CheckNumber(msg, "index", &index)
-		err = gameserver.CheckNumber(msg, "r", &r)
-		err = gameserver.CheckNumber(msg, "c", &c)
-		if err != nil {
-			response.Error(err.Error())
-			break
-		}
-
-		s, _ := client.Lobby.GetState("game")
-		game, _ := s.(GameState)
-
-		ok := verifyTurn(&response, game, client)
-		if !ok {
-			break
-		}
-
-		game, err = game.playFromHand(index, Pos{Row: r, Col: c})
-		if err != nil {
-			response.Error(err.Error())
-			break
-		}
-
-		
-		game, updates := game.clearUpdates()
-		client.Lobby.UpdateState("game", game)
-
-		updateMsg := msg
-		updateMsg.Msg = "update game"
-		updateMsg.StatusCode = 0
-		updateMsg.Body["updates"] = updates 
-		
-		client.Lobby.Broadcast(updateMsg)
-	case "attack":
-		var atkRow, atkCol, defRow, defCol, defPlayer int
-
-		type Param struct {
-			key string
-			dest *int
-		}
-
-		params := []Param{
-			{"atkRow", &atkRow},
-			{"atkCol", &atkCol}, 
-			{"defRow", &defRow}, 
-			{"defCol", &defCol}, 
-			{"defPlayer", &defPlayer},
-		}
-
-		for _, p := range params {
-			err := gameserver.CheckNumber(msg, p.key, p.dest)
-			if err != nil {
-				response.Error(err.Error())
-				break SwitchCommand
-			}
-		}
-		
-		s, ok := client.Lobby.GetState("game")
-		if !ok {
-			response.Error("err in getting the game")
-			break
-		}
-		game := s.(GameState)
-
-		ok = verifyTurn(&response, game, client)
-		if !ok {
-			break
-		}
-
-
-		game, err := game.attack(Pos{atkRow, atkCol}, 
-			Pos{defRow, defCol}, defPlayer)
-		if err != nil {
-			response.Error(err.Error())
-			break
-		}
-
-		game, updates := game.clearUpdates()
-		client.Lobby.UpdateState("game", game)
-
-		updateMsg := msg
-		updateMsg.Msg = "update game"
-		updateMsg.StatusCode = 0
-		updateMsg.Body["updates"] = updates 
-		
-		client.Lobby.Broadcast(updateMsg)
-	default:
-		return nil
-	}
 	gameserver.SendToClient(response, client)
+	log.Printf("Response: %v", response)
 	return nil
 }
 
 type Err struct { msg string }
 func (e Err) Error() string { return e.msg }
 
+func validateDeckString(d string) (deckMap DeckMap, err error) {
+	defer func() {
+		log.Printf("%v", deckMap)
+		err = validateDeck(deckMap) 
+	}()
+	
+	d = strings.ReplaceAll(d, "'", "\"")
+	var deckMapF DeckMap2
+	
+	errInt := json.Unmarshal([]byte(d), &deckMap)
+	errFlt := json.Unmarshal([]byte(d), &deckMapF)
+
+	if errInt == nil {
+		log.Printf("deck map was sent as [string]int")
+		return
+	}
+
+	if errFlt == nil {
+		log.Printf("deckmap: converting float to int")
+		deckMap = map[string]int{}
+		for k, v := range deckMapF {
+			deckMap[k] = int(v)
+		}
+		return
+	}
+
+	return nil, Err{"Couldn't parse: not a string map"}
+}
+
 func validateDeck(deckMap DeckMap) error {
+	numCards := 0
 	for name, amount := range deckMap {
 		if amount <= 0 {
-			return Err{"Amount must be > 0"}
+			return Err{"Card amounts must be greater than 0"}
+		}
+		if amount > CARD_AMOUNT_LIMIT {
+			return Err{fmt.Sprintf("Card amounts must be no more than %d", CARD_AMOUNT_LIMIT)}
 		}
 		if _, ok := Cards[name]; !ok {
 			return Err{fmt.Sprintf("Card %s doesn't exist", name)}
 		}
+		numCards += amount
 	}
+
+	if numCards < DECK_MIN_SIZE {
+		return Err{fmt.Sprintf("Decks must have at least %d cards", DECK_MIN_SIZE)}
+	}
+
+	if numCards > DECK_SIZE {
+		return Err{fmt.Sprintf("Decks cannot have more than %d", DECK_SIZE)}
+	}
+
+
 	return nil
 }
 
@@ -442,6 +303,22 @@ func createToken(user string) (token []byte, err error) {
 		jwt.MapClaims{"sub": user})
 	s, err := t.SignedString([]byte(ENV.jwt_key))
 	return []byte(s), err
+}
+
+// Writes HTTP Error.
+func getAuthUser(w http.ResponseWriter, r *http.Request) (string, error) {
+	token, ok := r.Header["Authorization"]
+	if !ok || len(token) == 0 {
+		http.Error(w, "Authorization header not found or empty", http.StatusBadRequest)
+		return "", Err{}
+	}
+
+	username, err := verifyToken(token[0])
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+	}
+
+	return username, err
 }
 
 func handleLogin(db *sql.DB, w http.ResponseWriter, r *http.Request) {
@@ -526,14 +403,18 @@ func handleSignup(db *sql.DB, w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-func handlePutDeck(db *sql.DB, w http.ResponseWriter, r *http.Request, username string) error {
+func handleValidateDeck(r *http.Request) (DeckMap, error) {
 	var deck DeckMap
 	err := json.NewDecoder(r.Body).Decode(&deck) 
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	err = validateDeck(deck)
+	return deck, validateDeck(deck)
+}
+
+func handlePutDeck(db *sql.DB, w http.ResponseWriter, r *http.Request, username string) error {
+	deck, err := handleValidateDeck(r)
 	if err != nil {
 		return err
 	}
@@ -589,27 +470,29 @@ func main() {
 		log.Printf("%s", bytes)
 		w.Write(bytes)
 	})
+	router.HandleFunc("/validatedeck", func(w http.ResponseWriter, r *http.Request) {
+		log.Println(r.URL)
+
+		_, err := handleValidateDeck(r)
+		if err != nil {
+			w.WriteHeader(400)
+			w.Write([]byte(err.Error()))
+		} else {
+			w.WriteHeader(http.StatusOK)
+		}
+	})
 	router.HandleFunc("/deck", func(w http.ResponseWriter, r *http.Request) {
 		log.Println(r.URL)
-		token, ok := r.Header["Authorization"]
-		if !ok || len(token) == 0 {
-			http.Error(w, "Authorization header not found or empty", http.StatusBadRequest)
-			log.Printf("Authorization header not found or empty")
-			return
-		}
 
-		username, err := verifyToken(token[0])
+		username, err := getAuthUser(w, r)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusUnauthorized)
 			return
 		}
 
 		if r.Method == http.MethodGet {
-			var deck string
-			err = db.QueryRow(`SELECT (deck) FROM users WHERE name=?`, username).Scan(&deck)
+			deck, err := getDeckString(db, username)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
-				log.Println(err)
 				return
 			}
 			io.WriteString(w, deck)
@@ -629,12 +512,12 @@ func main() {
 			log.Println(err)
 			return
 		}
-		go gameserver.HandleWSClient(conn, server, execute)
+		go gameserver.HandleWSClient(conn, server, execute, gameserver.WSCtx{W:w, R:r, Db:db})
 	})
 
 	c := cors.New(cors.Options{
         AllowedOrigins: []string{
-			"http://localhost:5173",
+			"http://localhost:*",
 			"http://mtcg.albertduong.com",
 			"https://mtcg.albertduong.com",
 		},

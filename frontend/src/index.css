@@ -10,12 +10,38 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+h1 {
+	font-size: 1.2rem;
+	font-weight: bold;
+}
+
+h2 {
+	font-size: 1.1rem;
+}
+
+ul {
+	margin: 0.5rem
+}
+
+li {
+	list-style-type: disc;
+	list-style-position: inside;
+}
+
+p {
+	margin-bottom: 0.5rem;
+}
+
 button {
 	background-color: lightgray;
-	padding: 0.5rem;
+	padding: 0.35rem;
 	display: flex;
 	align-items: center;
 	justify-content: center;
+}
+
+.white-btn {
+	background-color: white;
 }
 
 button:hover {

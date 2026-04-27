@@ -23,8 +23,13 @@ type StateUpdate struct {
 	Player3Board *Board `json:"player3board,omitempty"`
 	Player3Deck *int `json:"player3deck,omitempty"`
 
+	Player4Hand *[]string `json:"player4hand,omitempty"`
+	Player4Board *Board `json:"player4board,omitempty"`
+	Player4Deck *int `json:"player4deck,omitempty"`
+
 	NumPlayers *int `json:"numPlayers,omitempty"`
 	Mana *int `json:"mana,omitempty"`
+	MaxMana *int `json:"maxMana,omitempty"`
 }
 
 func flattenPlayer(game GameState, player int) (
@@ -42,14 +47,14 @@ func flattenPlayer(game GameState, player int) (
 func flatten(game GameState) StateUpdate {
 	p0 := game.Players[0]
 	p0d := len(p0.Deck)
-	var p1h, p2h, p3h *[]string
-	var p1b, p2b, p3b *Board
-	var p1d, p2d, p3d *int	
+	var p1h, p2h, p3h, p4h *[]string
+	var p1b, p2b, p3b, p4b *Board
+	var p1d, p2d, p3d, p4d *int	
 
 	p1h, p1b, p1d = flattenPlayer(game, 1)
 	p2h, p2b, p2d = flattenPlayer(game, 2)
 	p3h, p3b, p3d = flattenPlayer(game, 3)
-	//p4h, p4b, p4d = flattenPlayer(game, 4)
+	p4h, p4b, p4d = flattenPlayer(game, 4)
 
 	return StateUpdate{
 		Player0Hand: &p0.Hand,
@@ -68,9 +73,14 @@ func flatten(game GameState) StateUpdate {
 		Player3Board: p3b,
 		Player3Deck: p3d,
 
+		Player4Hand: p4h,
+		Player4Board: p4b,
+		Player4Deck: p4d,
+
 		Turn: &game.Turn,
 		NumPlayers: &game.NumPlayers,
 		Mana: &game.Mana,
+		MaxMana: &game.MaxMana,
 	}
 }
 
@@ -102,6 +112,10 @@ func (u StateUpdate) updatePlayer(player int, update playerUpdate) StateUpdate {
 		hand = &u.Player3Hand
 		board = &u.Player3Board
 		deck = &u.Player3Deck
+	case 4:
+		hand = &u.Player4Hand
+		board = &u.Player4Board
+		deck = &u.Player4Deck
 	default:
 		log.Fatalf("ERROR: tried to update player %d", player)
 	}

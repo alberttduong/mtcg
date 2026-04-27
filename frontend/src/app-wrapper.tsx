@@ -13,13 +13,19 @@ import {
 	joinLobby,
 	setLobbies,
 	addToChat,
-	confirmSelectedDeck,
+	setDeckData,
 	setDeck,
+	setGameState,
+	setGameNames,
+	setIsLeader,
 	updateLobby,
 } from "@/app/store"
+import { usePopup, Popup } from "@/features/component/popup"
+
 import { 
 	useNavigate 
 } from "react-router-dom"
+import { useSelector } from "react-redux"
 
 export function App(props: {className?: string, children: any}) {
 	const {className, children} = props
@@ -30,6 +36,8 @@ export function App(props: {className?: string, children: any}) {
 		dispatch(joinLobby(lob))
 	}
 
+	const [ newPopup, closePopup, popupText ] = usePopup()
+
 	useEffect(() => {
 		ConnectWS().then(() => {
 			loginWithToken((name: string) => {
@@ -39,6 +47,11 @@ export function App(props: {className?: string, children: any}) {
 			socketListener((e: any) => {
 				const res: Response = JSON.parse(e.data)
 				//console.log('App received ' + res.Msg)
+				if (res.StatusCode == 400) {
+					newPopup(`${res.Msg} error: ${res.Body.error}`)
+					return
+				}
+
 				switch (res.Msg) {
 				case "create lobby":
 					if (res.StatusCode == 200) {
@@ -50,34 +63,60 @@ export function App(props: {className?: string, children: any}) {
 								isLeader: true,
 							}]
 						}))
+						dispatch(setIsLeader(true))
 					}
 					break
 				case "get lobby":
 					dispatch(setLobbies(res.Body.lobbies))
 					break
 				case "chat newmsg":
-					dispatch(addToChat(res.Body.msg))
+					dispatch(addToChat(res.Body))
 					break
 				case "update lobby":
 					dispatch(updateLobby(res.Body))
 					break
-				case "set deck":
+				case "player ready":
 					if (res.StatusCode == 0) {
 						dispatch(setDeck(res.Body))
-					} else if (res.StatusCode == 200) {
-						dispatch(confirmSelectedDeck(res.Body["deckName"]))
+					}
+					break
+				case "players ready":
+					if (res.StatusCode == 0) {
+						for (const [name,] of Object.entries(res.Body)) {
+							dispatch(setDeck({name: name, ready: true}))
+						}
+					}
+					break
+				case "set deck":
+					if (res.StatusCode == 200) {
+						const d = res.Body["deck"]
+						const x = d.replace(/'/g, "\"")
+						dispatch(setDeckData(JSON.parse(x)))
 					}
 					break
 				case "join lobby":
 					if (res.StatusCode == 200) {
 						setLobby(res.Body.lobbyId)
-						navigate('/game')
 					}
+
 					break
 				case "leave lobby":
 					if (res.StatusCode == 200) {
 						setLobby(-1)
+						dispatch(setIsLeader(false))
+						dispatch(setDeckData(undefined))
 					}
+					break
+				case "promote leader":
+					dispatch(setIsLeader(true))
+					break
+				case "start game":
+					if (res.StatusCode != 0)
+						break	
+
+					dispatch(setGameState(res.Body.state))
+					dispatch(setGameNames(res.Body.names))
+					navigate("game")
 					break
 				}
 			})
@@ -87,6 +126,7 @@ export function App(props: {className?: string, children: any}) {
 	},[])
 
 	return <div className={className}>
+		<Popup text={popupText} closePopup={closePopup}/>
 		{children}
 	</div>
 }

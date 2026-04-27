@@ -1,12 +1,14 @@
 import type { JSX } from "react"
-import { DeckMenu } from "../counter/DeckMenu"
+import { DeckSelectionMenu } from "../deck/DeckSelectionMenu"
 import { useSelector } from "react-redux"
 import { useState, useEffect, useRef } from "react"
+import { GameRules } from "@/features/home/Rules"
 import { 
-	selectLobbyId,
+	selectChat,
+	selectNickname,
+	selectGameState,
 	useAppDispatch, 
-	joinLobby,
-} from "../../app/store"
+} from "@/app/store"
 import type { Body, Msg, Response } from "@/app/middleware"
 import { 
 	connected,
@@ -16,21 +18,21 @@ import {
 } from "@/app/middleware"
 import { 
 	GameComponent,
-	animation,
-	CardHovered,
+	type CardHovered,
 	getAllPlayers,
 } from "./GameComponent"
 import {
-	Lobby
-} from "./Lobby"
+	Chat,
+} from "../home/Lobby"
 import {
 	Popup,
+	ConfirmPopup,
 	usePopup,
 } from "@/features/component/popup"
 import { default as axios } from "axios"
-import { Cards } from "@/features/counter/Counter"
-import { type DeckOption } from "@/features/counter/DeckMenu"
-import { CardInfo } from "@/features/counter/CardInfo"
+import type { Cards } from "@/features/deck/DeckEditor"
+import type { DeckOption } from "@/features/deck/DeckSelectionMenu"
+import { CardInfo } from "@/features/deck/CardInfo"
 
 export interface Card {
 	name: string
@@ -38,10 +40,12 @@ export interface Card {
 	atk: number
 }
 
+// Needs to be hardcoded to for JSON encoding
 export interface GameState {
 	turn: number
 	numPlayers?: number 
 	playerNumber: number 
+	names: string[]
 
 	player0hand: string[]
 	player0board: Card[][]
@@ -59,32 +63,54 @@ export interface GameState {
 	player3board: Card[][]
 	player3deck: number
 
+	player4hand: string[]
+	player4board: Card[][]
+	player4deck: number
+
 	mana: number
+	maxMana: number
 }
 
 function newGameState(): GameState {
-	let board: Card[][] = []
+	const board: Card[][] = [[], [null, null, {
+		name: "Sand Castle",
+		hp: 0,
+		atk: 0,
+	}]]
 	return {
+		numPlayers: 4,
+		names: [
+			"Player1",
+			"Player2",
+			"Player3",
+			"Player4",
+			"Player5",
+		],
 		playerNumber: 0,
 
-		player0hand: [],
+		player0hand: ["1","1"],
 		player0board: board,
 		player0deck: 0,
 
-		player1hand: [],
+		player1hand: ["2","2"],
 		player1board: board,
 		player1deck: 0,
 
-		player2hand: [],
+		player2hand: ["3","3"],
 		player2board: board,
 		player2deck: 0,
 
-		player3hand: [],
+		player3hand: ["4","4"],
 		player3board: board,
 		player3deck: 0,
 
+		player4hand: ["5","5"],
+		player4board: board,
+		player4deck: 0,
+
 		turn: 0,
-		mana: 0,
+		mana: 3,
+		maxMana: 6,
 	}
 }
 
@@ -105,34 +131,38 @@ function playerToBoard(player: number, state: GameState)
 	return getAllPlayers(state)[player].board
 }
 
-function CardView(props: any) {
+function CardView(props: {cardHovered: CardHovered, cards: Cards, state: GameState}) {
 	const card: CardHovered = props.cardHovered
 	const cards: Cards = props.cards
 	const state: GameState = props.state
 	let boardCard: Card | undefined = undefined
-	if (card && card.location == "board" 
+	const player = card ? getAllPlayers(state)[card.player] : null
+	if (card && card.location === "board" 
 		&& card.row !== undefined
 		&& card.col !== undefined) {
 		const board = playerToBoard(card.player, state)
-		if (board ) {
+		if (board[card?.row]) {
 			const c = board[card.row][card.col]
-			if (c.name) {
+			if (c?.name) {
 				boardCard = c
 			}
 		}
 	}
 
-
-	return <div className="w-[250px] h-[200px] fixed left-0 bottom-0 bg-gray-100">
-		{card && card.location == "hand" &&
+	return <div className={`${props.className} h-[200px] fixed left-0 bottom-0 bg-gray-100`}>
+		{card && card.location === "hand" &&
 			<CardInfo name={card.name} info={cards[card.name]}/>
 		}
-		{card && card.location == "board" && boardCard && <>
-			<h1>{boardCard.name} (Player {card.player})</h1>
-			<h1>HP {boardCard.hp}</h1>
-			<h1>ATK {boardCard.atk || "0"}</h1>
-			<br/>
-			<h1>@r{card.row}c{card.col}</h1>
+		{card && card.location === "board" && boardCard && <>
+			<p>{boardCard.name} (Player {card.player})</p>
+			<p>HP {boardCard.hp}</p>
+			{ boardCard.name !== "Sand Castle" && <p>
+				ATK {boardCard.atk || "0"}
+			</p> || <>
+				<p>Cards in deck: {player?.deck}</p>
+				<p>Cards in hand: {player?.hand.length}</p>
+			</>}
+			<p>@r{card.row}c{card.col}</p>
 		</>}
 	</div>
 }
@@ -143,24 +173,22 @@ function sleep(ms: number) {
 
 export const Game = (): JSX.Element => {
 	const dispatch = useAppDispatch()
-	const lobby = useSelector(selectLobbyId)
 
-	const setLobby = (lob: number) => {
-		dispatch(joinLobby(lob))
-	}
-
+	const gameState = useSelector(selectGameState)
 	const [state, setState] = useState<GameState>(newGameState())
-	const [started, setStarted] = useState(false)
-	//const [lobby, setLobby] = useState(-1)
-	const [chat, setChat] = useState<string[]>([])
+	const [started,] = useState(true)
+
+	const chat = useSelector(selectChat)
+	const nickname = useSelector(selectNickname)
 
 	const [newPopup, closePopup, popupText] = usePopup()
 
 	const [cardHovered, setCardHovered] = useState<CardHovered>()
 
 	const [deck, setDeck] = useState<DeckOption>({data: {}})
+	const [rules, showRules] = useState<"Game Rules" | "">("")
 
-	let cards = useRef<Cards>({})
+	const cards = useRef<Cards>({})
 
 	const sendMsg = (msg: string, body?: Body) => {
 		const newMsg: Msg = {Msg: msg, Body: body || {}}
@@ -193,10 +221,10 @@ export const Game = (): JSX.Element => {
 				console.log('got mana')
 				break
 			case "win":
-				newPopup("Player " + u.anim.player + " won the game")
+				newPopup(`Player ${u.anim.player} won the game`)
 				break
 			default:
-				console.log("no animation for " + u.anim) 
+				console.log(`no animation for ${u.anim}`) 
 			}
 		}
 
@@ -210,8 +238,6 @@ export const Game = (): JSX.Element => {
 	}
 
 	useEffect(() => {
-		dispatch(connected())
-
 		axios.get(`${API_URL}/cards`)
 		.then((res) => {
 			cards.current = res.data
@@ -221,44 +247,11 @@ export const Game = (): JSX.Element => {
 	useEffect(() => {
 		socketListener((e: any) => {
 			const res: Response = JSON.parse(e.data)
-			if (res.StatusCode == 400) {
-				newPopup("Error: " + res.Body.error)
-			}
-
-			if (res.StatusCode != 200 && res.StatusCode != 0) {
-				console.log(`Got err code ${res.StatusCode} from server: ${res.Body.error}`)
-				return
-			}
-
 			switch (res.Msg) {
-			case "chat newmsg":
-				setChat(
-					[
-						...chat, 
-						res.Body.msg
-					]
-				)
-				break
-			case "start game":
-				if (res.StatusCode != 0)
-					break	
-
-				console.log('starting game')
-				const s: GameState = res.Body.state
-				setStarted(true)
-				setState(s)
-				break
-			case "leave lobby":
-				if (res.StatusCode == 200) {
-					setLobby(-1)
-					setStarted(false)
-				}
-				break
-			case "update game":
+			case "update game": {
 				const updates = res.Body.updates
-				//console.log(JSON.stringify(updates))
 
-				let newState = {...state}
+				let newState: GameState = {...state}
 				const update = async () => {
 					for (const u of updates) {
 						newState = await updateGame(u, newState)
@@ -267,33 +260,47 @@ export const Game = (): JSX.Element => {
 				}
 				update()
 				break
+				}
 			}
 		}, 'game')
-	}, [state, chat])
+	}, [state])
 
 	return <div>
 		<Popup closePopup={closePopup} text={popupText}/>
 
-		<Lobby
-			className="z-4 fixed top-0 left-0"
-			newPopup={newPopup}
-			lobby={lobby}
-			chat={chat}
-			sendMsg={sendMsg} />
-
-		{!started && <DeckMenu deck={deck} setDeck={setDeck} sendMsg={sendMsg}/>}
-
-		<CardView 
-			state={state}
-			cards={cards.current}
-			cardHovered={cardHovered}/>
+		{!started && <DeckSelectionMenu deck={deck} setDeck={setDeck} sendMsg={sendMsg}/>}
 
 		{started &&
 		<GameComponent 
 			setCardHovered={setCardHovered}
-			className="fixed right-0" 
 			game={state} sendMsg={sendMsg}/>}
+		
+		<button type="button" className="absolute top-5 right-5"
+			onClick={()=>showRules("Game Rules")}>
+			Show Rules
+		</button>
 
+		<ConfirmPopup 
+			vertical
+			OkElement={<GameRules 
+				className="w-fit h-[60vh] overflow-scroll pr-2"/>} 
+			closePopup={()=>showRules("")} 
+			closeText="Close"
+			text={rules}/>
+		
+		<Chat 
+			className="absolute left-0 bottom-0 w-[20vw]"
+			chat={chat}
+			transparent
+			toggleable
+			sendChat={(msg: string)=>
+				sendMsg("chat send", {name: nickname, msg: msg})
+			}/>
 
+		<CardView 
+			className="w-[10vw] absolute top-5 left-5 p-1"
+			state={state}
+			cards={cards.current}
+			cardHovered={cardHovered}/>
 	</div>
 }

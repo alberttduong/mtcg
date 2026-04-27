@@ -1,97 +1,43 @@
-import type { JSX } from "react"
+import { type JSX, useEffect, ReactNode } from "react"
 import { Popup, usePopup } from "@/features/component/popup"
 import { Link } from "react-router"
 import { useState } from "react"
-import { 
-	AvailableLobbies,
-	LobbyDisplay,
-} from "@/features/game/LobbyMenu"
-import { default as axios } from "axios"
-
+import DeckList from "@/features/deck/DeckList"
+import { CreateOrJoinLobby } from "@/features/home/Lobby"
+import { AvailableLobbies, LobbyDisplay, } from "@/features/home/LobbyMenu"
 import { 
 	type Credentials,
 	selectLoggedIn,
+	selectNickname,
+	setNickname,
 	selectChat,
 	selectUsername,
 	useAppDispatch, 
 	selectLobbies,
 	selectLobbyId,
+	selectDeckData,
 	logout,
 	loginAsUser,
 } from "../../app/store"
-import { 
-	send,
-	API_URL,
-} from "../../app/middleware"
+import { send, API_URL, } from "@/app/middleware"
 import { useSelector } from "react-redux"
+import { HomeWrapper } from "@/features/home/HomeWrapper"
 
-import { Field, Fieldset, 
-	Input, Label, Legend,
-	Button
-} from '@headlessui/react'
 
-const FieldStyle = "bg-gray-200 p-4"
-const FieldLegendStyle = "text-lg font-bold"
-const FieldInputStyle = "mt-1 block bg-white"
 
-function LoginForm(props: {login: (c: Credentials) => void}) {
-	const { login } = props
-	return <form action={(e) => {
-		const creds: Credentials = {
-			name: e.get("name")?.toString(),
-			password: e.get("password")?.toString(),
-		}
-		login(creds)
-	}}>
-		<Fieldset className={FieldStyle}>
-			<Legend className={FieldLegendStyle}>
-				Login
-			</Legend>
-			<Field>
-				<Label className="block">Username</Label>
-				<Input 
-					//defaultValue="Bill" 
-					className={FieldInputStyle} name="name" />
-			</Field>
-			<Field>
-				<Label className="block">Password</Label>
-				<Input defaultValue="1234" className={FieldInputStyle} name="password"/>
-			</Field>
-			<Button type="submit">Log in</Button>
-		</Fieldset>
-	</form>
+interface DoubleMenuProps {
+	left: ReactNode;
+	right: ReactNode;
+	className?: string;
+	children?: any; 
 }
 
-function SignupForm(props: {signup: (c: Credentials) => void}) {
-	const { signup } = props
-
-	return <form action={(e) => {
-		// confirm both pw are the same
-		const creds: Credentials = {
-			name: e.get("name")?.toString(),
-			password: e.get("password")?.toString(),
-		}
-		signup(creds)
-	}}>
-		<Fieldset className={FieldStyle}>
-			<Legend className={FieldLegendStyle}>
-				Signup
-			</Legend>
-			<Field>
-				<Label className="block">Username</Label>
-				<Input defaultValue="Bill" className={FieldInputStyle} name="name" />
-			</Field>
-			<Field>
-				<Label className="block">Password</Label>
-				<Input defaultValue="1234" className={FieldInputStyle} name="password"/>
-			</Field>
-			<Field>
-				<Label className="block">Confirm Password</Label>
-				<Input defaultValue="1234" className={FieldInputStyle} name="password"/>
-			</Field>
-			<Button type="submit">Log in</Button>
-		</Fieldset>
-	</form>
+export function DoubleMenu({left, right, className, children}: DoubleMenuProps): JSX.Element {
+	return <div className={`flex gap-3 items-center justify-center w-lg min-h-[10rem] items-stretch ${className}`}>
+		<div className="w-[50%]">{left}</div>
+		<div className="w-[50%] bg-gray-100">{right}</div>
+		{children}
+	</div>
 }
 
 export const Home = (): JSX.Element => {
@@ -100,41 +46,17 @@ export const Home = (): JSX.Element => {
 	const lobbyId = useSelector(selectLobbyId)
 	const username = useSelector(selectUsername)
 	const lobbies = useSelector(selectLobbies)
-	const [nickname, _] = useState('')
+	const nickname = useSelector(selectNickname)
 	const [newPopup, closePopup, popupText] = usePopup()
+	const ingameDeck = useSelector(selectDeckData)
+
 
 	const sendMsg = (msg: string, body?: any) => {
 		dispatch(send({Msg: msg, Body: body}))
 	}
 
-	function handleLogin(creds: Credentials) {
-		if (creds) {
-			axios.put(`${API_URL}/login`, creds)
-			.then((res) => {
-				newPopup(`Successfully logged in as ${creds.name}`)
-				dispatch(loginAsUser(creds.name))
-				localStorage.setItem('token', res.data)
-			}).catch(handleError)
-		}
-	}
+	const userInALobby = () => lobbyId > 0
 
-	function handleSignup(creds: Credentials) {
-		if (creds) {
-			axios.put(`${API_URL}/signup`, creds)
-			.then((res) => {
-				newPopup(`Successfully created account and logged in as ${creds.name}`)
-				dispatch(loginAsUser(creds.name))
-				localStorage.setItem('token', res.data)
-			}).catch(handleError)
-		}
-	}
-
-	function handleError(e: any) {
-		if (e.response && e.response.status) {
-			return newPopup(`Error ${e.response.status} ${e.response.data}`)
-		}
-		newPopup(`Unknown Error`)
-	}
 
 	function createLobby() {
 		if (!nickname) { 
@@ -143,56 +65,48 @@ export const Home = (): JSX.Element => {
 				return
 			}
 			sendMsg("create lobby", {nickname: username})
+			dispatch(setNickname(username))
 			return
 		}
 		sendMsg("create lobby", {nickname: nickname})
+		dispatch(setNickname(nickname))
+	}
+
+	function joinLobby(lobbyId: number) {
+		sendMsg("join lobby", {
+			lobbyId: lobbyId, 
+			nickname: nickname || username})
+
+		dispatch(setNickname(nickname || username))
 	}
 
 	const chat = useSelector(selectChat)
 
 
-	return <div className="flex flex-col items-center">
+	return <HomeWrapper>
 		<Popup 
 			closePopup={closePopup} 
 			text={popupText}
 		/>
-		<h1>Beach Wars</h1>
-		<h1>Multiplayer TCG</h1>
-		<div className="flex gap-3 items-center justify-center w-lg min-h-[10rem] items-stretch">
-			<div className="w-[50%]"> 
-				{lobbyId <= 0 && <AvailableLobbies lobbies={lobbies} sendMsg={sendMsg}/>}
-				{lobbyId > 0 && <LobbyDisplay 
+		<div>
+			{!userInALobby() && <DoubleMenu
+				left={<AvailableLobbies 
+					lobbies={lobbies} 
+					sendMsg={sendMsg}/>}
+				right={<CreateOrJoinLobby 
+					nickname={nickname} 
+					setNickname={(n) => dispatch(setNickname(n))}
+					createLobby={createLobby}
+					joinLobby={joinLobby}/>}
+			/>}
+
+			{userInALobby() && <DoubleMenu
+				left={<DeckList deck={ingameDeck}/>}
+				right={<LobbyDisplay 
+					nickname={nickname}
 					sendMsg={sendMsg}
 					chat={chat}/>}
-			</div>
-			<div className="w-[50%] bg-gray-100 p-2">
-				{lobbyId <= 0 && <div>
-					<h2>Create or join a lobby to play</h2>
-					<div>
-						<label>{loggedIn ? "Nickname" : "Name"}</label>
-						<input type="text" className="outline-1" placeholder={loggedIn ? username : ''}/>
-					</div>
-					<div className="mt-2 flex gap-2">
-						<Button onClick={createLobby}>Create</Button>
-						<Button>Join</Button>
-					</div>
-				</div>}
-			</div>
+			/>}
 		</div>
-		<div className="fixed top-10 left-10">
-			{username && `Logged in as ${username}`}
-
-			{loggedIn && <>
-				<button onClick={() => {
-					dispatch(logout())
-				}}>
-					Logout
-				</button>
-			</> || <>
-				<LoginForm login={handleLogin}/>
-				<SignupForm signup={handleSignup}/>
-			</>}
-		</div>
-		<Link to="/" className="fixed right-10 bottom-10">More info</Link>
-	</div>
+	</HomeWrapper>
 }

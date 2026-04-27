@@ -7,8 +7,12 @@ const (
 	CASTLE_HEALTH = 10
 	BOARD_COLS = 5
 	BOARD_ROWS = 2
-	DECK_SIZE = 30
 	HAND_SIZE = 30
+
+	DECK_SIZE = 30
+	DECK_MIN_SIZE = 10
+	CARD_AMOUNT_LIMIT = 4
+	MAX_PLAYERS = 4
 )
 
 
@@ -100,7 +104,7 @@ type GameState struct {
 	NumPlayers int `json:"numPlayers"`
 	Updates []GameStateUpdate
 	Mana int `json:"mana"`
-	maxMana int
+	MaxMana int `json:"mana"`
 }
 
 
@@ -207,9 +211,9 @@ func (state GameState) drawCards() GameState {
 func (state GameState) startTurn() GameState {
 	var err error
 	if state.Turn % state.NumPlayers == 0 {
-		state.maxMana += 1
+		state.MaxMana += 1
 	}
-	state.Mana = state.maxMana
+	state.Mana = state.MaxMana
 
 	state, err = state.draw(state.Turn)
 	if err == nil {

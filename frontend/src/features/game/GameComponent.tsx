@@ -1,9 +1,11 @@
-import { GameState } from "./Game"
+import type { GameState } from "./Game"
 import { clnx } from "@/features/component/util"
 import { useState } from "react"
 import { 
 	deckCard,
 	handCard, gridCard,
+	absLeft,
+	absRight,
 	absCenter,
 	absCenterY,
 } from "./styles"
@@ -124,7 +126,7 @@ function Hands(props: {
 	]
 
 	let currentOpponent = -1
-	return (<> { players.map((player: Player, i: number) => {
+	return (<> { players.filter((p) => p.number === game.playerNumber).map((player: Player, i: number) => {
 		let handStyle = absCenter + " bottom-0 "
 		let cardStyle = ""
 
@@ -256,6 +258,7 @@ function GridBoard(props: {
 	opponent?: number, 
 	className?: string,
 	render: (i: number, j: number) => any,
+	playerInfo?: string,
 	bold?: boolean,
 	renderInfo?: () => any,
 }) {
@@ -265,13 +268,14 @@ function GridBoard(props: {
 		render,
 		bold,
 		renderInfo,
+		playerInfo,
 	} = props
 
 	let columnStyle = " flex flex-col"
 	let rowStyle = " flex"
 	let deckPos = "right-[-100px]"
 	let horizontal = true
-	if (opponent === 0) {
+	if (opponent === 0 || opponent == 3) {
 		columnStyle = " flex flex-col-reverse"
 		rowStyle = " flex flex-row-reverse"
 		deckPos = "left-[-100px]" 
@@ -289,31 +293,25 @@ function GridBoard(props: {
 		deckPos = "top-[-60px]" 
 		horizontal = false 
 	}
-	return <>
-		<div className={className + rowStyle}>
-			{renderInfo !== undefined && <div 
-				className={clnx(
-					bold ? "font-bold" : "",
-					deckCard,
-					horizontal ? absCenterY : absCenter,
-					deckPos,
-				)}
-			>
-				{renderInfo()}
-			</div>}
-			{[...Array(5)].map((_u, i) => {
-				return <div className={clnx(
-					columnStyle,
-				)} key={i}>
-					{
-						[...Array(2)].map((_u, j) => {
-							return render(j, i)
-						})
-					}
-				</div>
-			})}
+	return <div className={className + rowStyle}>
+		<div className="absolute -top-7 left-[50%] translate-x-[-50%]">
+			<p className="text-nowrap">
+				{playerInfo || "Player info..."}
+				{bold ? "'s turn" : ""}
+			</p>
 		</div>
-	</>
+		{[...Array(5)].map((_u, i) => {
+			return <div className={clnx(
+				columnStyle,
+			)} key={i}>
+				{
+					[...Array(2)].map((_u, j) => {
+						return render(j, i)
+					})
+				}
+			</div>
+		})}
+	</div>
 }
 
 function BoardEvents(props: BoardEventsProps) {
@@ -358,7 +356,7 @@ function BoardEvents(props: BoardEventsProps) {
 							setSelectedBoard([-1,-1,-1])
 						} else {
 							setSelectedBoard([i,j,player])
-							if (selectAttack[0] != -1) {
+							if (selectAttack[0] !== -1) {
 								sendAttack([i,j,player])
 							}
 						}
@@ -375,6 +373,7 @@ interface BoardProps {
 	board?: Card[][]
 	selectedBoard: number[]
 	player: number
+	playerInfo: string,
 	opponent?: number
 	deck?: number
 	bold?: boolean,
@@ -386,6 +385,7 @@ function Board(props: BoardProps) {
 		board,
 		selectedBoard,
 		player,
+		playerInfo,
 		opponent,
 		deck,
 		bold,
@@ -394,23 +394,17 @@ function Board(props: BoardProps) {
 		bold={bold}
 		opponent={opponent}
 		className={className}
-		renderInfo={() => {
-			return <>
-				Player {player}
-				<div>Deck ({deck})</div>
-			</>
-		}}
-			
+		playerInfo={playerInfo}
 		render={(i, j) => {
-			let card
-			if (board && board[i] && board[i][j].name) {
+			let card: Card
+			if (board && board[i] && board[i][j]?.name) {
 				card = board[i][j]
 			}
 
 			let style = (selectedBoard && 
-				selectedBoard[0] == i &&
-				selectedBoard[1] == j &&
-				selectedBoard[2] == player) ?
+				selectedBoard[0] === i &&
+				selectedBoard[1] === j &&
+				selectedBoard[2] === player) ?
 				" bg-yellow-100" : ""
 
 			return <div 
@@ -422,7 +416,7 @@ function Board(props: BoardProps) {
 					<div>{card.name}</div>
 					<div>
 						{card.hp || "0"}
-						{card.atk ? "/" + card.atk : ""}
+						{card.atk ? `/${card.atk}` : ""}
 					</div>
 				</div>}
 			</div>
@@ -470,12 +464,18 @@ export function getAllPlayers(game: GameState): Player[] {
 			board: game.player3board,
 			deck: game.player3deck,
 		},
+		{
+			number: 4,
+			hand: game.player4hand,
+			board: game.player4board,
+			deck: game.player4deck,
+		}
 	]
 	return p.slice(0, game.numPlayers)
 }
 
 export function GameComponent(props: GameComponentProps) {
-	const { game, sendMsg, setCardHovered, className } = props
+	const {game, sendMsg, setCardHovered, className} = props
 	const [hoverBoard, setHoverBoard] = useState([-1,-1,-1])
 
 	const [selectedBoard, setSelectedBoard] = useState([-1,-1,-1])
@@ -499,17 +499,20 @@ export function GameComponent(props: GameComponentProps) {
 	function Boards() {
 		const players = allPlayers()
 
-		const opponentBoardStyles = [
+		const opponentBoardStyles = players.length < 5 ? [
 			absCenter + " top-20 ", // TOP
 			absCenterY + " left-20 ", // LEFT
 			absCenterY + " right-20 ", // RIGHT 
+		] : [
+			absLeft + " top-10 ", // TOP
+			absCenterY + " left-10 ", // LEFT
+			absCenterY + " right-10 ", // RIGHT 
+			absRight + " top-10 ", // TOP
 		]
 
 		let currentOpponent = -1
 
 		return (<> { players.map((player: Player, i: number) => {
-
-			
 			let boardStyle = absCenter + " bottom-20 "
 			if (player.number != game.playerNumber) {
 				currentOpponent += 1
@@ -533,14 +536,15 @@ export function GameComponent(props: GameComponentProps) {
 					}
 				/>
 				<Board
-					className={"z-0 " + boardStyle}
+					playerInfo={game.names[i]}	
+					className={`z-0 ${boardStyle}`}
 					selectedBoard={selectedBoard}
 					board={player.board}
 					player={player.number}
-					bold={game.turn == player.number}
+					bold={game.turn === player.number}
 					deck={player.deck}
 					opponent={
-						game.playerNumber == player.number ?
+						game.playerNumber === player.number ?
 							undefined : currentOpponent
 					}
 				/>
@@ -550,12 +554,14 @@ export function GameComponent(props: GameComponentProps) {
 
 	function CenterMenu() {
 		return <div className={absCenter + absCenterY}>
+			{/*
 			<div>You: {game.playerNumber}</div>
 			<div>Turn: {game.turn || "0"}</div>
 			<div>Mana: {game.mana}</div>
 			{hoverBoard}<br/>
 			{selectedBoard}
-			{game.player0board[0][0].name}
+			*/}
+			{game.player0board[0] && game.player0board[0][0]?.name}
 		</div>
 	}
 
@@ -563,23 +569,39 @@ export function GameComponent(props: GameComponentProps) {
 	return <div id="game-component" className={className}>
 		<div 
 			id="board"
-			className="bg-blue-100 w-[80vw] h-[95vh] relative z-0">
-
+			className="w-[80vw] h-[90vh] relative z-0"
+		>
 			<CenterMenu/>
 			<Boards/>
 			<Hands game={game} hoverBoard={hoverBoard} setCardHovered={setCardHovered} sendMsg={sendMsg}/>
 
-			<div className="absolute bottom-10 right-10">
-				<button onClick={() => {
-					setSelectAttack(selectedBoard)
-					setSelectedBoard([-1,-1,-1])
-				}}>
-					Attack	
-				</button>
-				<button onClick={() => sendMsg("end turn")}>
-					End Turn
-				</button>
+
+			<div className="fixed flex flex-col items-end bottom-3 right-3">
+				<div className="flex items-center gap-1 mb-2">
+					{Array.from({length:game.maxMana-game.mana}).map(()=><img 
+						 className="w-[1.4rem]" 
+						 src="./src/gray-water-drop-svgrepo-com.svg"/>)}
+					{Array.from({length:game.mana}).map(()=><img 
+						 className="w-[1.4rem]" 
+						 src="./src/water-drop-svgrepo-com.svg"/>)}
+				</div>
+
+				{game.turn === game.playerNumber && <div className="flex gap-3">
+					<button 
+						type="button"
+						onClick={() => {
+							setSelectAttack(selectedBoard)
+							setSelectedBoard([-1,-1,-1])
+						}}
+					>
+						Attack	
+					</button>
+					<button onClick={() => sendMsg("end turn")}>
+						End Turn
+					</button>
+				</div>}
 			</div>
+
 		</div>
 	</div>
 }

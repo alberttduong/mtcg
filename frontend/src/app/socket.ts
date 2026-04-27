@@ -7,6 +7,18 @@ class Socket {
 		[eventName: string]: any
 	}
 
+	static s: Socket | null
+
+	static instance(): Socket {
+		if (this.s == null) {
+			const s = new Socket()
+			this.s = s
+			return s
+		} else {
+			return this.s
+		}
+	}
+
   constructor() {
     this.socket = null
 	this.callbacks = {}

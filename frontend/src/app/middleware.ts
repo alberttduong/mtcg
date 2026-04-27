@@ -24,13 +24,12 @@ export type Response = {
 
 export type SendMsg = (msg: string, body?: Body) => void
 
-const DEV = process.env.NODE_ENV
+const DEV = process.env.NODE_ENV === 'development'
 const api_url = DEV ? 'localhost:8080' : 'mtcg-api.albertduong.com'
 const ws_url = `ws${DEV ? '' : 's'}://${api_url}/ws`
-export const API_URL = `https://${api_url}`
+export const API_URL = `http${DEV ? '' : 's'}://${api_url}`
 
 const listenerMiddleware = createListenerMiddleware()
-let socket = new Socket()
 
 const connected = createAction<undefined>('connected')
 const send = createAction<Msg>('send')
@@ -38,20 +37,20 @@ const send = createAction<Msg>('send')
 listenerMiddleware.startListening({
 	actionCreator: connected,
 	effect: async () => { 
-		socket.connect(ws_url)
+		Socket.instance().connect(ws_url)
 	}
 })
 
 export async function ConnectWS() {
 	return new Promise(resolve => {
-		socket.connect(ws_url)
+		Socket.instance().connect(ws_url)
 
-		socket.on('open', () => {
+		Socket.instance().on('open', () => {
 			//console.log('Connected')
 			resolve(0)
 		})
 
-		socket.on('message', (e: any) => {
+		Socket.instance().on('message', (e: any) => {
 			console.log(`Got ${e.data}`)
 		})
 	} )
@@ -62,12 +61,12 @@ listenerMiddleware.startListening({
 	actionCreator: send,
 	effect: async (action) => { 
 		console.log(`socket sending ${action.payload.Msg}`)
-		socket.send(action.payload)
+		Socket.instance().send(action.payload)
 	}
 })
 
 function socketListener(callback: any, callbackName?: string) {
-	socket.on('message', callback, callbackName)
+	Socket.instance().on('message', callback, callbackName)
 }
 
 export function useSendMsg(dispatch: any) {
@@ -77,8 +76,9 @@ export function useSendMsg(dispatch: any) {
 	}
 }
 
+/*
 export async function getStatusCode(msg: string): Promise<number> {
-	socket.on('message', (e: any) => {
+	Socket.on('message', (e: any) => {
 		const res: Response = JSON.parse(e.data)
 		if (res.Msg == msg) {
 			return res.StatusCode
@@ -90,27 +90,8 @@ export async function getStatusCode(msg: string): Promise<number> {
 function socketOn(event: string, callback: any) {
 	socket.on(event, callback)
 }
+*/
 
-
-export function receiveLobbyResponse(
-	res: Response,
-	setLobby: (i: number) => void
-) {
-	switch (res.Msg) {
-	case "create lobby":
-		setLobby(res.Body.lobbyId)
-		break
-	case "join lobby":
-		setLobby(res.Body.lobbyId)
-		break
-	case "leave lobby":
-		if (res.StatusCode == 200) {
-			setLobby(-1)
-		}
-		break
-	}
-}
-
-export { socketListener, socketOn }
+export { socketListener }
 export { listenerMiddleware }
 export { connected, send }
