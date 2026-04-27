@@ -25,7 +25,6 @@ import { usePopup, Popup } from "@/features/component/popup"
 import { 
 	useNavigate 
 } from "react-router-dom"
-import { useSelector } from "react-redux"
 
 export function App(props: {className?: string, children: any}) {
 	const {className, children} = props

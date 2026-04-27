@@ -2,7 +2,6 @@ import type { GameState } from "./Game"
 import { clnx } from "@/features/component/util"
 import { useState } from "react"
 import { 
-	deckCard,
 	handCard, gridCard,
 	absLeft,
 	absRight,
@@ -173,6 +172,8 @@ export interface CardHovered {
 	col?: number
 }
 
+export const NullCardHovered: CardHovered = {name:"", player:0, location:"hand"}
+
 interface HandProps {
 	hand?: string[],
 	player?: number,
@@ -267,31 +268,22 @@ function GridBoard(props: {
 		className, 
 		render,
 		bold,
-		renderInfo,
 		playerInfo,
 	} = props
 
 	let columnStyle = " flex flex-col"
 	let rowStyle = " flex"
-	let deckPos = "right-[-100px]"
-	let horizontal = true
 	if (opponent === 0 || opponent == 3) {
 		columnStyle = " flex flex-col-reverse"
 		rowStyle = " flex flex-row-reverse"
-		deckPos = "left-[-100px]" 
-		horizontal = true
 	}
 	if (opponent === 1) {
 		columnStyle = " flex flex-row-reverse"
 		rowStyle = " flex flex-col"
-		deckPos = "bottom-[-60px]" 
-		horizontal = false 
 	}
 	if (opponent === 2) {
 		columnStyle = " flex flex-row"
 		rowStyle = " flex flex-col-reverse"
-		deckPos = "top-[-60px]" 
-		horizontal = false 
 	}
 	return <div className={className + rowStyle}>
 		<div className="absolute -top-7 left-[50%] translate-x-[-50%]">
@@ -387,7 +379,6 @@ function Board(props: BoardProps) {
 		player,
 		playerInfo,
 		opponent,
-		deck,
 		bold,
 	} = props
 	return <GridBoard 
@@ -396,12 +387,12 @@ function Board(props: BoardProps) {
 		className={className}
 		playerInfo={playerInfo}
 		render={(i, j) => {
-			let card: Card
-			if (board && board[i] && board[i][j]?.name) {
+			let card: Card | null = null
+			if (board?.[i]?.[j]?.name) {
 				card = board[i][j]
 			}
 
-			let style = (selectedBoard && 
+			const style = (selectedBoard && 
 				selectedBoard[0] === i &&
 				selectedBoard[1] === j &&
 				selectedBoard[2] === player) ?

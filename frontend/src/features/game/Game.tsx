@@ -11,14 +11,15 @@ import {
 } from "@/app/store"
 import type { Body, Msg, Response } from "@/app/middleware"
 import { 
-	connected,
 	socketListener,
 	send,
 	API_URL
 } from "@/app/middleware"
 import { 
+	animation,
 	GameComponent,
 	type CardHovered,
+	NullCardHovered,
 	getAllPlayers,
 } from "./GameComponent"
 import {
@@ -72,11 +73,14 @@ export interface GameState {
 }
 
 function newGameState(): GameState {
-	const board: Card[][] = [[], [null, null, {
+	const emptyCard: Card = { name: "", hp: 0, atk: 0, }
+
+	const board: Card[][] = [[], [emptyCard, emptyCard, {
 		name: "Sand Castle",
 		hp: 0,
 		atk: 0,
 	}]]
+	
 	return {
 		numPlayers: 4,
 		names: [
@@ -131,17 +135,20 @@ function playerToBoard(player: number, state: GameState)
 	return getAllPlayers(state)[player].board
 }
 
-function CardView(props: {cardHovered: CardHovered, cards: Cards, state: GameState}) {
-	const card: CardHovered = props.cardHovered
-	const cards: Cards = props.cards
-	const state: GameState = props.state
+function CardView(props: {
+	card: CardHovered, 
+	cards: Cards, 
+	state: GameState, 
+	className?: string
+}) {
+	const {card, cards, state, className} = props
 	let boardCard: Card | undefined = undefined
 	const player = card ? getAllPlayers(state)[card.player] : null
 	if (card && card.location === "board" 
 		&& card.row !== undefined
 		&& card.col !== undefined) {
 		const board = playerToBoard(card.player, state)
-		if (board[card?.row]) {
+		if (board?.[card?.row]) {
 			const c = board[card.row][card.col]
 			if (c?.name) {
 				boardCard = c
@@ -149,7 +156,7 @@ function CardView(props: {cardHovered: CardHovered, cards: Cards, state: GameSta
 		}
 	}
 
-	return <div className={`${props.className} h-[200px] fixed left-0 bottom-0 bg-gray-100`}>
+	return <div className={`${className} h-[200px] fixed left-0 bottom-0 bg-gray-100`}>
 		{card && card.location === "hand" &&
 			<CardInfo name={card.name} info={cards[card.name]}/>
 		}
@@ -174,8 +181,9 @@ function sleep(ms: number) {
 export const Game = (): JSX.Element => {
 	const dispatch = useAppDispatch()
 
-	const gameState = useSelector(selectGameState)
-	const [state, setState] = useState<GameState>(newGameState())
+	const game = useSelector(selectGameState)
+
+	const [state, setState] = useState<GameState>(game || newGameState())
 	const [started,] = useState(true)
 
 	const chat = useSelector(selectChat)
@@ -183,7 +191,7 @@ export const Game = (): JSX.Element => {
 
 	const [newPopup, closePopup, popupText] = usePopup()
 
-	const [cardHovered, setCardHovered] = useState<CardHovered>()
+	const [cardHovered, setCardHovered] = useState<CardHovered>(NullCardHovered)
 
 	const [deck, setDeck] = useState<DeckOption>({data: {}})
 	const [rules, showRules] = useState<"Game Rules" | "">("")
@@ -301,6 +309,6 @@ export const Game = (): JSX.Element => {
 			className="w-[10vw] absolute top-5 left-5 p-1"
 			state={state}
 			cards={cards.current}
-			cardHovered={cardHovered}/>
+			card={cardHovered}/>
 	</div>
 }

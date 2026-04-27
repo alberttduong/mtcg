@@ -1,12 +1,9 @@
-import { type JSX, useEffect, ReactNode } from "react"
+import { type JSX, ReactNode } from "react"
 import { Popup, usePopup } from "@/features/component/popup"
-import { Link } from "react-router"
-import { useState } from "react"
 import DeckList from "@/features/deck/DeckList"
 import { CreateOrJoinLobby } from "@/features/home/Lobby"
 import { AvailableLobbies, LobbyDisplay, } from "@/features/home/LobbyMenu"
 import { 
-	type Credentials,
 	selectLoggedIn,
 	selectNickname,
 	setNickname,
@@ -16,10 +13,8 @@ import {
 	selectLobbies,
 	selectLobbyId,
 	selectDeckData,
-	logout,
-	loginAsUser,
 } from "../../app/store"
-import { send, API_URL, } from "@/app/middleware"
+import { send } from "@/app/middleware"
 import { useSelector } from "react-redux"
 import { HomeWrapper } from "@/features/home/HomeWrapper"
 
@@ -93,15 +88,17 @@ export const Home = (): JSX.Element => {
 				left={<AvailableLobbies 
 					lobbies={lobbies} 
 					sendMsg={sendMsg}/>}
+
 				right={<CreateOrJoinLobby 
 					nickname={nickname} 
-					setNickname={(n) => dispatch(setNickname(n))}
+					setNickname={(n: string) => dispatch(setNickname(n))}
 					createLobby={createLobby}
 					joinLobby={joinLobby}/>}
 			/>}
 
 			{userInALobby() && <DoubleMenu
 				left={<DeckList deck={ingameDeck}/>}
+
 				right={<LobbyDisplay 
 					nickname={nickname}
 					sendMsg={sendMsg}
